@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marvel - Cinematic Experience Fan Guide</title>
+    <title>Marvels MCU & Avangers Fan Guide</title>
 	<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
 	<link rel="manifest" href="manifest.json">
     <style>
@@ -199,7 +199,7 @@
             margin-bottom: 15px;
             display: flex;
             gap: 20px;
-            align-items: center;
+            align-items: stretch;
             cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
@@ -233,6 +233,8 @@
 
         .movie-content {
             flex-grow: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .movie-title {
@@ -247,11 +249,13 @@
             font-size: 0.95rem;
         }
 
-        /* Bewertung: Popcorn-Tüten statt Sterne */
+        /* Bewertung: Popcorn-Tüten statt Sterne - unten rechts in der Karte */
         .movie-rating {
             display: flex;
             gap: 6px;
-            margin-top: 10px;
+            margin-top: auto;
+            padding-top: 10px;
+            justify-content: flex-end;
         }
 
         .popcorn {
