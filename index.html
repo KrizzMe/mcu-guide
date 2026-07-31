@@ -363,7 +363,16 @@
                 position: fixed;
                 inset: 0;
                 background: rgba(0, 0, 0, 0.6);
-                z-index: 1400;
+                /* WICHTIG: niedriger als der z-index von .header-bar (1000)!
+                   Das Menü liegt im HTML verschachtelt innerhalb von
+                   .header-bar, welches durch position:fixed + z-index einen
+                   eigenen Stacking-Context bildet. Der z-index des Menüs
+                   (weiter unten, 1500) wirkt deshalb NUR innerhalb dieses
+                   Headers, nicht gegenüber diesem Backdrop hier. Wäre dieser
+                   Wert höher als 1000, würde er den kompletten Header samt
+                   Menü optisch überdecken und dessen Klicks abfangen -
+                   sichtbar bliebe alles (halbtransparent), klickbar aber nicht. */
+                z-index: 900;
             }
 
             .nav-backdrop.open {
