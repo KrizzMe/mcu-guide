@@ -7,49 +7,73 @@
                 "title": "Spider-Man (2002)",
                 "poster": "posters/spider-man-2002.jpg",
                 "desc": "Der Schüler Peter Parker wird von einer genetisch veränderten Spinne gebissen und entwickelt Superkräfte, die er nach einer Tragödie nutzt, um als Spider-Man New York vor dem Grünen Troll zu schützen.",
-                "id": "spider-man-2002"
+                "id": "spider-man-2002",
+                "runtime": "121 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0145487/",
+                "tmdb": "https://www.themoviedb.org/movie/557-spider-man"
             },
             {
                 "title": "Spider-Man 2 (2004)",
                 "poster": "posters/spider-man-2-2004.jpg",
                 "desc": "Peter kämpft mit den Belastungen seines Doppellebens und verliert zeitweise seine Kräfte, während der besessene Wissenschaftler Dr. Octopus die Stadt bedroht.",
-                "id": "spider-man-2-2004"
+                "id": "spider-man-2-2004",
+                "runtime": "127 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0316654/",
+                "tmdb": "https://www.themoviedb.org/movie/558-spider-man-2"
             },
             {
                 "title": "Spider-Man 3 (2007)",
                 "poster": "posters/spider-man-3-2007.jpg",
                 "desc": "Ein außerirdischer Symbiont verstärkt Peters dunkle Seiten, während er sich gleichzeitig Sandman, dem neuen Grünen Troll und Venom stellen muss.",
-                "id": "spider-man-3-2007"
+                "id": "spider-man-3-2007",
+                "runtime": "139 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0413300/",
+                "tmdb": "https://www.themoviedb.org/movie/559-spider-man-3"
             },
             {
                 "title": "Hulk (2003)",
                 "poster": "posters/hulk-2003.jpg",
                 "desc": "Der Wissenschaftler Bruce Banner rettet bei einem Laborunfall einen Kollegen und nimmt eine tödliche Dosis Gammastrahlung auf, was ihn fortan bei Wut in ein gigantisches grünes Monster verwandelt.",
-                "id": "hulk-2003"
+                "id": "hulk-2003",
+                "runtime": "138 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0286716/",
+                "tmdb": "https://www.themoviedb.org/movie/1927-hulk"
             },
             {
                 "title": "Der unglaubliche Hulk (2008)",
                 "poster": "posters/der-unglaubliche-hulk-2008.jpg",
                 "desc": "Bruce Banner ist auf der Flucht vor dem US-Militär untergetaucht und sucht verzweifelt nach einem Heilmittel, bis ein gieriger Soldat sich selbst in ein noch gefährlicheres Monster verwandelt.",
-                "id": "der-unglaubliche-hulk-2008"
+                "id": "der-unglaubliche-hulk-2008",
+                "runtime": "114 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0800080/",
+                "tmdb": "https://www.themoviedb.org/movie/1724-the-incredible-hulk"
             },
             {
                 "title": "Iron Man (2008)",
                 "poster": "posters/iron-man-2008.jpg",
                 "desc": "Der Milliardär und Waffenhersteller Tony Stark baut nach einer Entführung eine verfeinerte Rüstung, um das Unrecht wiedergutzumachen, das seine eigenen Waffen angerichtet haben.",
-                "id": "iron-man-2008"
+                "id": "iron-man-2008",
+                "runtime": "126 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0371746/",
+                "tmdb": "https://www.themoviedb.org/movie/1726-iron-man"
             },
             {
                 "title": "Iron Man 2 (2010)",
                 "poster": "posters/iron-man-2-2010.jpg",
                 "desc": "Tony Stark steht unter starkem Druck der Regierung, seine Technologie zu übergeben, während der Rachefeldzug des russischen Wissenschaftlers Ivan Vanko seine Existenz bedroht.",
-                "id": "iron-man-2-2010"
+                "id": "iron-man-2-2010",
+                "runtime": "124 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1228705/",
+                "tmdb": "https://www.themoviedb.org/movie/10138-iron-man-2"
             },
             {
                 "title": "Thor (2011)",
                 "poster": "posters/thor-2011.jpg",
                 "desc": "Der arrogante Donnergott Thor wird von seinem Vater Odin auf die Erde verbannt und muss ohne seine Kräfte lernen, was es bedeutet, ein wahrer Held zu sein.",
-                "id": "thor-2011"
+                "id": "thor-2011",
+                "runtime": "115 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0800369/",
+                "tmdb": "https://www.themoviedb.org/movie/10195-thor"
             }
         ],
         "navLabel": "Erste Helden"
@@ -62,13 +86,19 @@
                 "title": "Captain America: The First Avenger (2011)",
                 "poster": "posters/captain-america-the-first-avenger-2011.jpg",
                 "desc": "Der kränkliche Rekrut Steve Rogers wird während des Zweiten Weltkriegs durch ein Supersoldaten-Serum zum Hoffnungsträger Captain America und kämpft gegen die Geheimorganisation HYDRA.",
-                "id": "captain-america-the-first-avenger-2011"
+                "id": "captain-america-the-first-avenger-2011",
+                "runtime": "124 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0458339/",
+                "tmdb": "https://www.themoviedb.org/movie/1771-captain-america-the-first-avenger"
             },
             {
                 "title": "Marvel’s The Avengers (2012)",
                 "poster": "posters/marvels-the-avengers-2012.jpg",
                 "desc": "Als Thors hinterlistiger Bruder Loki die Erde mit einer Außerirdischen-Armee bedroht, stellt Nick Fury erstmals das Team aus Iron Man, Cap, Thor, Hulk, Black Widow und Hawkeye zusammen.",
-                "id": "marvels-the-avengers-2012"
+                "id": "marvels-the-avengers-2012",
+                "runtime": "143 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0848228/",
+                "tmdb": "https://www.themoviedb.org/movie/24428-the-avengers"
             }
         ],
         "navLabel": "Erste Avengers"
@@ -81,49 +111,73 @@
                 "title": "The Amazing Spider-Man (2012)",
                 "poster": "posters/the-amazing-spider-man-2012.jpg",
                 "desc": "In dieser Neuinterpretation kommt der Highschool-Schüler Peter Parker dem Verschwinden seiner Eltern auf die Spur und muss New York vor dem mutierten Wissenschaftler \"Echse\" retten.",
-                "id": "the-amazing-spider-man-2012"
+                "id": "the-amazing-spider-man-2012",
+                "runtime": "136 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0948470/",
+                "tmdb": "https://www.themoviedb.org/movie/1930-the-amazing-spider-man"
             },
             {
                 "title": "Iron Man 3 (2013)",
                 "poster": "posters/iron-man-3-2013.jpg",
                 "desc": "Ein traumatisierter Tony Stark muss sich ohne die Hilfe seiner fortgeschrittenen Rüstungen einem mysteriösen Terroristen namens Mandarin stellen, der sein Privatleben zerstört.",
-                "id": "iron-man-3-2013"
+                "id": "iron-man-3-2013",
+                "runtime": "130 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1300854/",
+                "tmdb": "https://www.themoviedb.org/movie/68721-iron-man-3"
             },
             {
                 "title": "Thor: The Dark Kingdom (2013)",
                 "poster": "posters/thor-the-dark-kingdom-2013.jpg",
                 "desc": "Thor muss sich mit seinem inhaftierten Bruder Loki verbünden, um das Universum vor den Urzeit-Dunkelelfen unter der Führung von Malekith zu retten.",
-                "id": "thor-the-dark-kingdom-2013"
+                "id": "thor-the-dark-kingdom-2013",
+                "runtime": "112 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1981115/",
+                "tmdb": "https://www.themoviedb.org/movie/76338-thor-the-dark-world"
             },
             {
                 "title": "The Amazing Spider-Man 2 (2014)",
                 "poster": "posters/the-amazing-spider-man-2-2014.jpg",
                 "desc": "Peter Parker kämpft mit dem Versprechen an Gwendolyns Vater, während der von Elektrizität getriebene Electro und sein alter Freund Harry Osborn die Stadt bedrohen.",
-                "id": "the-amazing-spider-man-2-2014"
+                "id": "the-amazing-spider-man-2-2014",
+                "runtime": "141 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1872181/",
+                "tmdb": "https://www.themoviedb.org/movie/102382-the-amazing-spider-man-2"
             },
             {
                 "title": "Captain America: The Return of the First Avenger (2014)",
                 "poster": "posters/captain-america-the-return-of-the-first-avenger-2014.jpg",
                 "desc": "Steve Rogers deckt eine Verschwörung innerhalb von S.H.I.E.L.D. auf und wird dabei von einem gehirngewaschenen Attentäter aus seiner eigenen Vergangenheit konfrontiert.",
-                "id": "captain-america-the-return-of-the-first-avenger-2014"
+                "id": "captain-america-the-return-of-the-first-avenger-2014",
+                "runtime": "136 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1843866/",
+                "tmdb": "https://www.themoviedb.org/movie/100402-captain-america-the-winter-soldier"
             },
             {
                 "title": "Guardians of the Galaxy (2014)",
                 "poster": "posters/guardians-of-the-galaxy-2014.jpg",
                 "desc": "Eine bunt zusammengewürfelte Truppe von Weltraum-Außenseitern rund um Peter Quill schließt sich zusammen, um einen mächtigen kosmischen Stein vor dem Kree-Krieger Ronan zu beschützen.",
-                "id": "guardians-of-the-galaxy-2014"
+                "id": "guardians-of-the-galaxy-2014",
+                "runtime": "121 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt2015381/",
+                "tmdb": "https://www.themoviedb.org/movie/118340-guardians-of-the-galaxy"
             },
             {
                 "title": "Avengers: Age of Ultron (2015)",
                 "poster": "posters/avengers-age-of-ultron-2015.jpg",
                 "desc": "Als Tony Starks künstliche Intelligenz Ultron ein eigenes Bewusstsein entwickelt und die Menschheit auslöschen will, müssen die Avengers ihre internen Konflikte überwinden.",
-                "id": "avengers-age-of-ultron-2015"
+                "id": "avengers-age-of-ultron-2015",
+                "runtime": "141 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt2395427/",
+                "tmdb": "https://www.themoviedb.org/movie/99861-avengers-age-of-ultron"
             },
             {
                 "title": "Ant-Man (2015)",
                 "poster": "posters/ant-man-2015.jpg",
                 "desc": "Der Meisterdieb Scott Lang bekommt einen Anzug geschenkt, der ihn auf Ameisengröße schrumpfen lässt, und muss verhindern, dass diese Technologie für militärische Zwecke missbraucht wird.",
-                "id": "ant-man-2015"
+                "id": "ant-man-2015",
+                "runtime": "117 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt0478970/",
+                "tmdb": "https://www.themoviedb.org/movie/102899-ant-man"
             }
         ],
         "navLabel": "Neue Helden"
@@ -136,79 +190,118 @@
                 "title": "Deadpool (2016)",
                 "poster": "posters/deadpool-2016.jpg",
                 "desc": "Der krebskranke Ex-Söldner Wade Wilson erhält durch illegale Gen-Experimente Selbstheilungskräfte und begibt sich als durchgeknallter Antiheld auf die Jagd nach dem Mann, der sein Gesicht entstellt hat.",
-                "id": "deadpool-2016"
+                "id": "deadpool-2016",
+                "runtime": "108 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1431045/",
+                "tmdb": "https://www.themoviedb.org/movie/293660-deadpool"
             },
             {
                 "title": "Captain America: Civil War (2016)",
                 "poster": "posters/captain-america-civil-war-2016.jpg",
                 "desc": "Der Streit über die staatliche Kontrolle von Superhelden spaltet die Avengers in zwei verfeindete Lager unter der Führung von Captain America und Iron Man.",
-                "id": "captain-america-civil-war-2016"
+                "id": "captain-america-civil-war-2016",
+                "runtime": "147 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt3498820/",
+                "tmdb": "https://www.themoviedb.org/movie/271110-captain-america-civil-war"
             },
             {
                 "title": "Doctor Strange (2016)",
                 "poster": "posters/doctor-strange-2016.jpg",
                 "desc": "Nach einem schweren Autounfall sucht der arrogante Neurochirurg Stephen Strange Heilung in Nepal und wird dort in die Welt der mystischen Künste und Magie eingeführt.",
-                "id": "doctor-strange-2016"
+                "id": "doctor-strange-2016",
+                "runtime": "115 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1211837/",
+                "tmdb": "https://www.themoviedb.org/movie/284052-doctor-strange"
             },
             {
                 "title": "Guardians of the Galaxy Vol. 2 (2017)",
                 "poster": "posters/guardians-of-the-galaxy-vol-2-2017.jpg",
                 "desc": "Während die Guardians weiterhin das Weltall beschützen, trifft Peter Quill auf seinen leiblichen Vater Ego, der ein dunkles, galaktisches Geheimnis verbirgt.",
-                "id": "guardians-of-the-galaxy-vol-2-2017"
+                "id": "guardians-of-the-galaxy-vol-2-2017",
+                "runtime": "137 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt3896198/",
+                "tmdb": "https://www.themoviedb.org/movie/283995-guardians-of-the-galaxy-vol-2"
             },
             {
                 "title": "Spider-Man: Homecoming (2017)",
                 "poster": "posters/spider-man-homecoming-2017.jpg",
                 "desc": "Der junge Peter Parker versucht unter den Fittichen von Mentor Tony Stark den Schulalltag zu bewältigen, legt sich dabei jedoch auf eigene Faust mit dem Waffen-Schmuggler Vulture an.",
-                "id": "spider-man-homecoming-2017"
+                "id": "spider-man-homecoming-2017",
+                "runtime": "133 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt2250912/",
+                "tmdb": "https://www.themoviedb.org/movie/315635-spider-man-homecoming"
             },
             {
                 "title": "Thor: Tag der Entscheidung (2017)",
                 "poster": "posters/thor-tag-der-entscheidung-2017.jpg",
                 "desc": "Thor verliert seinen Hammer, wird auf einem Müllplaneten gefangen genommen und muss in einer Gladiatoren-Arena gegen den Hulk antreten, um Asgard zu retten.",
-                "id": "thor-tag-der-entscheidung-2017"
+                "id": "thor-tag-der-entscheidung-2017",
+                "runtime": "131 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt3501632/",
+                "tmdb": "https://www.themoviedb.org/movie/284053-thor-ragnarok"
             },
             {
                 "title": "Black Panther (2018)",
                 "poster": "posters/black-panther-2018.jpg",
                 "desc": "Prinz T'Challa kehrt nach dem Tod seines Vaters in das technologisch hochentwickelte, isolierte Königreich Wakanda zurück, um seinen Thron gegen einen finsteren Herausforderer zu verteidigen.",
-                "id": "black-panther-2018"
+                "id": "black-panther-2018",
+                "runtime": "135 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt1825683/",
+                "tmdb": "https://www.themoviedb.org/movie/284054-black-panther"
             },
             {
                 "title": "Deadpool 2 (2018)",
                 "poster": "posters/deadpool-2-2018.jpg",
                 "desc": "Wade Wilson gründet die chaotische Truppe \"X-Force\", um einen jungen Mutanten vor dem zeitreisenden Cyborg-Soldaten Cable zu beschützen.",
-                "id": "deadpool-2-2018"
+                "id": "deadpool-2-2018",
+                "runtime": "120 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt5463162/",
+                "tmdb": "https://www.themoviedb.org/movie/383498-deadpool-2"
             },
             {
                 "title": "Avengers: Infinity War (2018)",
                 "poster": "posters/avengers-infinity-war-2018.jpg",
                 "desc": "Der mächtige Titan Thanos sammelt die sechs Infinity-Steine im Universum, um die Hälfte aller Lebewesen mit einem Schnipsen auszulöschen – die Avengers stellen sich ihm vergeblich entgegen.",
-                "id": "avengers-infinity-war-2018"
+                "id": "avengers-infinity-war-2018",
+                "runtime": "149 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt4154756/",
+                "tmdb": "https://www.themoviedb.org/movie/299536-avengers-infinity-war"
             },
             {
                 "title": "Ant-Man and the Wasp (2018)",
                 "poster": "posters/ant-man-and-the-wasp-2018.jpg",
                 "desc": "Scott Lang schließt sich mit Hope van Dyne zusammen, um in das Quantenreich vorzudringen und Hopes Mutter zu retten, während er gleichzeitig unter Hausarrest steht.",
-                "id": "ant-man-and-the-wasp-2018"
+                "id": "ant-man-and-the-wasp-2018",
+                "runtime": "119 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt5095030/",
+                "tmdb": "https://www.themoviedb.org/movie/363088-ant-man-and-the-wasp"
             },
             {
                 "title": "Captain Marvel (2019)",
                 "poster": "posters/captain-marvel-2019.jpg",
                 "desc": "In den 1990er-Jahren gerät die Kree-Kriegerin Vers auf die Erde und deckt gemeinsam mit dem jungen S.H.I.E.L.D.-Agenten Nick Fury ihre eigene, menschliche Vergangenheit auf.",
-                "id": "captain-marvel-2019"
+                "id": "captain-marvel-2019",
+                "runtime": "124 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt4154664/",
+                "tmdb": "https://www.themoviedb.org/movie/299537-captain-marvel"
             },
             {
                 "title": "Avengers: Endgame (2019)",
                 "poster": "posters/avengers-endgame-2019.jpg",
                 "desc": "Fünf Jahre nach Thanos' verheerendem Schnipsen nutzen die überlebenden Helden Zeitreisen durch das Quantenreich, um die Steine aus der Vergangenheit zu holen und ihre Freunde zurückzubringen.",
-                "id": "avengers-endgame-2019"
+                "id": "avengers-endgame-2019",
+                "runtime": "181 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt4154796/",
+                "tmdb": "https://www.themoviedb.org/movie/299534-avengers-endgame"
             },
             {
                 "title": "Spider-Man: Far From Home (2019)",
                 "poster": "posters/spider-man-far-from-home-2019.jpg",
                 "desc": "Auf einer Schulfahrt durch Europa wird Peter Parker von Nick Fury rekrutiert, um an der Seite des mysteriösen Mysterio gegen gigantische Elementar-Monster zu kämpfen.",
-                "id": "spider-man-far-from-home-2019"
+                "id": "spider-man-far-from-home-2019",
+                "runtime": "129 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt6320628/",
+                "tmdb": "https://www.themoviedb.org/movie/429617-spider-man-far-from-home"
             }
         ],
         "navLabel": "Infinity-Krieg"
@@ -221,61 +314,91 @@
                 "title": "Black Widow (2021)",
                 "poster": "posters/black-widow-2021.jpg",
                 "desc": "Natasha Romanoff muss sich nach den Ereignissen von Civil War ihrer eigenen Vergangenheit im russischen Ausbildungsprogramm stellen und trifft auf ihre frühere \"Ersatzfamilie\".",
-                "id": "black-widow-2021"
+                "id": "black-widow-2021",
+                "runtime": "134 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt3480822/",
+                "tmdb": "https://www.themoviedb.org/movie/497698-black-widow"
             },
             {
                 "title": "Shang-Chi (2021)",
                 "poster": "posters/shang-chi-2021.jpg",
                 "desc": "Ein junger Kampfsportler wird von seiner Vergangenheit eingeholt, muss sich seinem Vater stellen und wird am Ende direkt im Kreis der Avengers aufgenommen.",
-                "id": "shang-chi-2021"
+                "id": "shang-chi-2021",
+                "runtime": "132 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt9376612/",
+                "tmdb": "https://www.themoviedb.org/movie/566525-shang-chi-and-the-legend-of-the-ten-rings"
             },
             {
                 "title": "Spider-Man: No Way Home (2021)",
                 "poster": "posters/spider-man-no-way-home-2021.jpg",
                 "desc": "Ein verpatzter Zauberspruch von Doctor Strange reißt Löcher ins Multiversum und bringt die Schurken sowie die Spider-Men aus den früheren Filmreihen in die MCU-Welt.",
-                "id": "spider-man-no-way-home-2021"
+                "id": "spider-man-no-way-home-2021",
+                "runtime": "148 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt10872600/",
+                "tmdb": "https://www.themoviedb.org/movie/634649-spider-man-no-way-home"
             },
             {
                 "title": "Doctor Strange in the Multiverse of Madness (2022)",
                 "poster": "posters/doctor-strange-in-the-multiverse-of-madness-2022.jpg",
                 "desc": "Doctor Strange reist mit der Teenagerin America Chavez durch gefährliche Parallelwelten, um sie vor einer von der Magie korrumpierten Wanda Maximoff zu beschützen.",
-                "id": "doctor-strange-in-the-multiverse-of-madness-2022"
+                "id": "doctor-strange-in-the-multiverse-of-madness-2022",
+                "runtime": "126 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt9419884/",
+                "tmdb": "https://www.themoviedb.org/movie/453395-doctor-strange-in-the-multiverse-of-madness"
             },
             {
                 "title": "Thor: Love and Thunder (2022)",
                 "poster": "posters/thor-love-and-thunder-2022.jpg",
                 "desc": "Thor schließt sich mit seiner Ex-Freundin Jane Foster zusammen, die nun den Hammer Mjolnir führt, um den schrecklichen Götterschlächter Gorr aufzuhalten.",
-                "id": "thor-love-and-thunder-2022"
+                "id": "thor-love-and-thunder-2022",
+                "runtime": "129 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt10648342/",
+                "tmdb": "https://www.themoviedb.org/movie/616037-thor-love-and-thunder"
             },
             {
                 "title": "Black Panther: Wakanda Forever (2022)",
                 "poster": "posters/black-panther-wakanda-forever-2022.jpg",
                 "desc": "Nach dem Tod von König T'Challa muss Wakanda um seine Trauer kämpfen und sich gleichzeitig gegen das Volk des Unterwasser-Herrschers Namor verteidigen.",
-                "id": "black-panther-wakanda-forever-2022"
+                "id": "black-panther-wakanda-forever-2022",
+                "runtime": "162 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt9114286/",
+                "tmdb": "https://www.themoviedb.org/movie/505642-black-panther-wakanda-forever"
             },
             {
                 "title": "Ant-Man and the Wasp: Quantumania (2023)",
                 "poster": "posters/ant-man-and-the-wasp-quantumania-2023.jpg",
                 "desc": "Scott Lang und seine Familie werden versehentlich tief in das Quantenreich gezogen und treffen dort auf den zeitreisenden Eroberer Kang.",
-                "id": "ant-man-and-the-wasp-quantumania-2023"
+                "id": "ant-man-and-the-wasp-quantumania-2023",
+                "runtime": "125 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt10954600/",
+                "tmdb": "https://www.themoviedb.org/movie/640146-ant-man-and-the-wasp-quantumania"
             },
             {
                 "title": "Guardians of the Galaxy Vol. 3 (2023)",
                 "poster": "posters/guardians-of-the-galaxy-vol-3-2023.jpg",
                 "desc": "Die Guardians begeben sich auf eine gefährliche Rettungsmission für ihren Freund Rocket und müssen sich dessen grausamem Schöpfer, dem High Evolutionary, stellen.",
-                "id": "guardians-of-the-galaxy-vol-3-2023"
+                "id": "guardians-of-the-galaxy-vol-3-2023",
+                "runtime": "150 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt6791350/",
+                "tmdb": "https://www.themoviedb.org/movie/447365-guardians-of-the-galaxy-vol-3"
             },
             {
                 "title": "The Marvels (2023)",
                 "poster": "posters/the-marvels-2023.jpg",
                 "desc": "Captain Marvel, Monica Rambeau und Kamala Khan tauschen durch eine Quanten-Verstrickung jedes Mal die Plätze, wenn sie ihre Kräfte einsetzen, und müssen lernen, als Team zu arbeiten.",
-                "id": "the-marvels-2023"
+                "id": "the-marvels-2023",
+                "runtime": "105 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt10676048/",
+                "tmdb": "https://www.themoviedb.org/movie/609681-the-marvels"
             },
             {
                 "title": "Deadpool & Wolverine (2024)",
                 "poster": "posters/deadpool-wolverine-2024.jpg",
                 "desc": "Die Time Variance Authority (TVA) reißt Deadpool aus seinem Alltag, woraufhin er sich widerwillig mit einem gebrochenen Wolverine aus einem anderen Universum verbünden muss.",
-                "id": "deadpool-wolverine-2024"
+                "id": "deadpool-wolverine-2024",
+                "runtime": "128 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt6263850/",
+                "tmdb": "https://www.themoviedb.org/movie/533535-deadpool-wolverine"
             }
         ],
         "navLabel": "Multiversum"
@@ -288,37 +411,55 @@
                 "title": "Eternals (2021)",
                 "poster": "posters/eternals-2021.jpg",
                 "desc": "Als die mächtigen Syntheten-Krieger Eternals nach Jahrtausenden aus der Verborgenheit treten, um die Menschheit vor Bestien zu beschützen, verhindern sie den Ausbruch eines riesigen Welten-Schöpfers – dessen versteinerter Giganten-Körper fortan als Monument im Ozean verbleibt.",
-                "id": "eternals-2021"
+                "id": "eternals-2021",
+                "runtime": "156 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt9032400/",
+                "tmdb": "https://www.themoviedb.org/movie/524434-eternals"
             },
             {
                 "title": "Captain America: Brave New World (2025)",
                 "poster": "posters/captain-america-brave-new-world-2025.jpg",
                 "desc": "Sam Wilson muss sich als neuer Captain America ohne Super-Serum beweisen und deckt eine Verschwörung im Weißen Haus auf. Der Kampf um das neue Wunder-Metall Adamantium führt zum Clash mit Präsident Ross, der sich in den unberechenbaren Red Hulk verwandelt.",
-                "id": "captain-america-brave-new-world-2025"
+                "id": "captain-america-brave-new-world-2025",
+                "runtime": "119 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt14513804/",
+                "tmdb": "https://www.themoviedb.org/movie/822119-captain-america-brave-new-world"
             },
             {
                 "title": "Thunderbolts* (2025)",
                 "poster": "posters/thunderbolts-2025.jpg",
                 "desc": "Ein Team aus gescheiterten Antihelden und Ex-Schurken (u. a. Yelena Belova und Bucky Barnes) wird in eine Falle gelockt. Sie müssen wider Willen zusammenarbeiten, um zu überleben und ihre dunkle Vergangenheit zu überwinden.",
-                "id": "thunderbolts-2025"
+                "id": "thunderbolts-2025",
+                "runtime": "127 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt20969586/",
+                "tmdb": "https://www.themoviedb.org/movie/986056-thunderbolts"
             },
             {
                 "title": "The Fantastic 4: First Steps (2025)",
                 "poster": "posters/the-fantastic-4-first-steps-2025.jpg",
                 "desc": "Marvels legendäre Erstlings-Familie startet in einem stilvollen 60er-Jahre-Paralleluniversum. Als das gigantische Kosmos-Wesen Galactus ihre Erde bedroht, stellt sich das Team dem Weltuntergang – und ebnet den Weg zum nächsten Avengers-Multiversums-Event.",
-                "id": "the-fantastic-4-first-steps-2025"
+                "id": "the-fantastic-4-first-steps-2025",
+                "runtime": "115 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt10676052/",
+                "tmdb": "https://www.themoviedb.org/movie/617126-the-fantastic-4-first-steps"
             },
             {
                 "title": "Avengers: Doomsday (2026)",
                 "poster": "posters/avengers-doomsday-2026.jpg",
                 "desc": "Als der mächtige Meisterstratege Doctor Doom die Existenz des gesamten Multiversums bedroht, müssen sich die Helden der neuen Ära – von den Avengers über die Thunderbolts bis hin zu den Fantastic Four – für eine epische Abwehrschlacht zusammenschließen.",
-                "id": "avengers-doomsday-2026"
+                "id": "avengers-doomsday-2026",
+                "runtime": "165 Min.",
+                "imdb": "https://www.imdb.com/de/title/tt21357150/",
+                "tmdb": "https://www.themoviedb.org/movie/1003596-avengers-doomsday"
             },
             {
                 "title": "Avengers: Secret Wars (2027)",
                 "poster": "posters/avengers-secret-wars-2027.jpg",
                 "desc": "In der ultimativen Schicksalsschlacht treffen die Helden und Welten der gesamten Marvel-Kinogeschichte aufeinander, um den endgültigen Kollaps der Realitäten abzuwenden und das Multiversum neu zu ordnen.",
-                "id": "avengers-secret-wars-2027"
+                "id": "avengers-secret-wars-2027",
+                "runtime": "---",
+                "imdb": "https://www.imdb.com/de/title/tt21361444/",
+                "tmdb": "https://www.themoviedb.org/movie/1003598-avengers-secret-wars"
             }
         ],
         "navLabel": "Neue Ära"

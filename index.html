@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marvel - Cinematic Experience Fan Guide</title>
+    <title>Marvels MCU & Avangers Fan Guide</title>
 	<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
 	<link rel="manifest" href="manifest.json">
     <style>
@@ -239,11 +239,20 @@
             flex-direction: column;
         }
 
+        .movie-title-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
         .movie-title {
             font-size: 1.3rem;
             font-weight: bold;
             color: #ffffff;
-            margin-bottom: 8px;
+            min-width: 0;
         }
 
         .movie-desc {
@@ -251,13 +260,57 @@
             font-size: 0.95rem;
         }
 
-        /* Bewertung: Popcorn-Tüten statt Sterne - unten rechts in der Karte */
+        /* Gemeinsame untere Zeile der Karte: links Laufzeit + IMDb/TMDb-Icons,
+           rechts die Popcorn-Bewertung. margin-top: auto sorgt dafür, dass die
+           Zeile immer unten in der Karte sitzt (siehe .movie-content: flex column). */
+        .movie-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 10px;
+        }
+
+        .movie-meta-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .movie-runtime {
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 4px;
+            font-size: 0.85rem;
+            font-weight: normal;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .runtime-icon {
+            font-size: 0.95em;
+        }
+
+        .meta-icon {
+            height: 18px;
+            width: auto;
+            display: block;
+            opacity: 0.8;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .meta-icon:hover {
+            opacity: 1;
+            transform: scale(1.12);
+        }
+
+        /* Bewertung: Popcorn-Tüten statt Sterne */
         .movie-rating {
             display: flex;
             gap: 6px;
-            margin-top: auto;
-            padding-top: 10px;
-            justify-content: flex-end;
         }
 
         .popcorn {
@@ -490,6 +543,22 @@
                 font-size: 1.1rem;
             }
 
+            .movie-runtime {
+                font-size: 0.75rem;
+            }
+
+            .meta-icon {
+                height: 15px;
+            }
+
+            .movie-meta-row {
+                gap: 6px;
+            }
+
+            .movie-meta-left {
+                gap: 6px;
+            }
+
             footer {
                 font-size: 0.7rem;
                 padding: 8px 5px;
@@ -634,6 +703,22 @@
             return `<div class="movie-rating" data-movie-id="${movieId}">${bags}</div>`;
         }
 
+        function renderMovieRuntime(movie) {
+            return movie.runtime
+                ? `<span class="movie-runtime"><span class="runtime-icon" aria-hidden="true">🎞️</span>${escapeHtml(movie.runtime)}</span>`
+                : '';
+        }
+
+        function renderMovieMeta(movie) {
+            const imdbLink = movie.imdb
+                ? `<a href="${escapeHtml(movie.imdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf IMDb ansehen"><img class="meta-icon" src="imdb.png" alt="IMDb" loading="lazy"></a>`
+                : '';
+            const tmdbLink = movie.tmdb
+                ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDb ansehen"><img class="meta-icon" src="tmdb.png" alt="TMDb" loading="lazy"></a>`
+                : '';
+            return `<div class="movie-meta-left">${imdbLink}${tmdbLink}</div>`;
+        }
+
         function renderMovieCard(movie) {
             return `
         <div class="movie-card" onclick="openOverlay(this)">
@@ -641,9 +726,15 @@
                 <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy">
             </div>
             <div class="movie-content">
-                <div class="movie-title">${escapeHtml(movie.title)}</div>
+                <div class="movie-title-row">
+                    <div class="movie-title">${escapeHtml(movie.title)}</div>
+                    ${renderMovieRuntime(movie)}
+                </div>
                 <div class="movie-desc">${escapeHtml(movie.desc)}</div>
-                ${renderRatingWidget(movie.id)}
+                <div class="movie-meta-row">
+                    ${renderMovieMeta(movie)}
+                    ${renderRatingWidget(movie.id)}
+                </div>
             </div>
         </div>`;
         }
