@@ -85,6 +85,44 @@
             gap: 6px;
         }
 
+        /* Hamburger-Button: nur auf Mobile sichtbar (siehe Media Query),
+           liegt links im Header über dem Titel */
+        .nav-toggle {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 12px;
+            transform: translateY(-50%);
+            width: 38px;
+            height: 38px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            padding: 0;
+            z-index: 1010;
+        }
+
+        .nav-toggle span {
+            display: block;
+            width: 20px;
+            height: 2px;
+            margin: 4px auto;
+            background-color: var(--text-color);
+            border-radius: 2px;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .nav-toggle.open span:nth-child(1) {
+            transform: translateY(6px) rotate(45deg);
+        }
+        .nav-toggle.open span:nth-child(2) {
+            opacity: 0;
+        }
+        .nav-toggle.open span:nth-child(3) {
+            transform: translateY(-6px) rotate(-45deg);
+        }
+
         /* H1 als kompakter Titel in der Top-Bar */
 		.header-bar h1 {
             font-family: 'Bangers', cursive, sans-serif;
@@ -122,6 +160,17 @@
         .quick-nav a:hover {
             color: #ffffff;
             background-color: var(--accent-color);
+        }
+
+        /* Home-Button etwas hervorgehoben, damit er sich von den Sektionen abhebt */
+        .quick-nav a.nav-home {
+            border: 1px solid var(--accent-color);
+        }
+
+        /* Schließen-Button (X) ist nur für das mobile Drawer-Menü gedacht -
+           auf Desktop komplett ausgeblendet (siehe Media Query fürs Mobile-Styling) */
+        .nav-close {
+            display: none;
         }
 
         /* Standard Abstandhalter für Desktop */
@@ -198,6 +247,30 @@
             font-size: 0.95rem;
         }
 
+        /* Bewertung: Popcorn-Tüten statt Sterne */
+        .movie-rating {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .popcorn {
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: pointer;
+            user-select: none;
+            filter: grayscale(1) opacity(0.35);
+            transition: filter 0.15s ease, transform 0.1s ease;
+        }
+
+        .popcorn.filled {
+            filter: none;
+        }
+
+        .popcorn:hover {
+            transform: scale(1.2);
+        }
+
         /* Overlay / Lightbox Styling */
         #poster-overlay {
             display: none;
@@ -272,47 +345,92 @@
                 display: none;
             }
 
-            /* Vertikale Sidebar links ohne Hintergrund */
+            /* Hamburger-Button auf Mobile einblenden */
+            .nav-toggle {
+                display: block;
+            }
+
+            /* Halbtransparenter Hintergrund hinter dem Drawer.
+               Deckt IMMER den kompletten Bildschirm ab (0 bis 100vh),
+               dadurch kein Überlappen/Reinragen in Header oder Footer mehr,
+               egal wie hoch diese je nach Gerät gerade sind. */
+            .nav-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 1400;
+            }
+
+            .nav-backdrop.open {
+                display: block;
+            }
+
+            /* Vollflächiges Drawer-Panel links, klar vom Content abgesetzt
+               durch einen durchgehenden, blickdichten Hintergrund
+               (kein durchscheinender roter Rand mehr) */
             .quick-nav.mobile-sidebar {
                 display: flex;
                 flex-direction: column;
                 position: fixed;
-                top: clamp(55px, 11vw, 75px);
-                left: -150px; /* Standardmäßig eingeklappt */
-                width: 45px;
-                height: calc(100vh - clamp(70px, 14vw, 100px));
-                background: transparent;
-                backdrop-filter: none;
-                border: none;
-                z-index: 1050;
-                padding: 10px 4px;
-                gap: 10px;
-                transition: left 0.3s ease;
+                top: 0;
+                left: 0;
+                width: min(58vw, 220px);
+                height: 100vh;
+                height: 100dvh;
+                background-color: #161616;
+                border-right: 1px solid var(--border-color);
+                box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+                z-index: 1500;
+                padding: 64px 12px 20px;
+                gap: 6px;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
                 overflow-y: auto;
                 box-sizing: border-box;
-                align-items: center;
+                align-items: stretch;
             }
 
-            /* Wenn die Klasse 'open' aktiv ist, fährt die Leiste nach links rein */
+            /* Wenn die Klasse 'open' aktiv ist, fährt das Panel ein */
             .quick-nav.mobile-sidebar.open {
-                left: 0;
+                transform: translateX(0);
             }
 
-            /* Vertikaler Text für die Links in der Sidebar */
+            /* Schließen-Button oben im Drawer - nur hier sichtbar */
+            .nav-close {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: absolute;
+                top: 16px;
+                right: 16px;
+                width: 34px;
+                height: 34px;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                color: var(--text-color);
+                font-size: 1.1rem;
+                line-height: 1;
+                cursor: pointer;
+            }
+
+            /* Normale, waagerechte Links im Drawer statt gedrehtem Text */
             .quick-nav.mobile-sidebar a {
-                writing-mode: vertical-lr;
-                transform: rotate(180deg);
-                font-size: 0.65rem;
-                padding: 8px 4px;
-                text-align: center;
-                white-space: nowrap;
-                background-color: rgba(18, 18, 18, 0.85);
-                border-radius: 4px;
+                writing-mode: horizontal-tb;
+                transform: none;
+                font-size: 0.82rem;
+                padding: 10px 12px;
+                text-align: left;
+                white-space: normal;
+                background-color: rgba(255,255,255,0.03);
+                border-radius: 6px;
                 color: var(--text-muted);
                 text-decoration: none;
                 border: 1px solid var(--border-color);
             }
 
+            .quick-nav.mobile-sidebar a:active,
             .quick-nav.mobile-sidebar a:hover {
                 color: #ffffff;
                 background-color: var(--accent-color);
@@ -347,6 +465,10 @@
                 font-size: 0.8rem;
             }
 
+            .popcorn {
+                font-size: 1.1rem;
+            }
+
             footer {
                 font-size: 0.7rem;
                 padding: 8px 5px;
@@ -355,508 +477,19 @@
     </style>
 </head>
 <body>
+    <div id="top"></div>
 
     <!-- Fixierte Kopfzeile oben -->
     <header class="header-bar">
+        <button class="nav-toggle" id="navToggle" onclick="toggleSidebar()" aria-label="Menü öffnen">
+            <span></span><span></span><span></span>
+        </button>
         <h1>Marvel - Cinematic Experience Fan Guide</h1>
-        <nav class="quick-nav mobile-sidebar" id="mobileNav">
-            <a href="#Erste_Helden" onclick="toggleSidebar()">1. Erste Helden</a>
-            <a href="#Erste_Avengers" onclick="toggleSidebar()">2. Der ersten Avengers</a>
-            <a href="#Neue_Helden" onclick="toggleSidebar()">3. Neue Helden</a>
-            <a href="#Infinity_Krieg" onclick="toggleSidebar()">4. Der Infinity Krieg</a>
-            <a href="#Multiversum" onclick="toggleSidebar()">5. Das Multiversum</a>
-            <a href="#Neue_Aera" onclick="toggleSidebar()">6. Eine Neue Ära</a>
-        </nav>
+        <nav class="quick-nav mobile-sidebar" id="mobileNav"></nav>
     </header>
+    <div class="nav-backdrop" id="navBackdrop" onclick="toggleSidebar()"></div>
 
     <div class="container content-wrapper">
-        <!-- Sektion 1 -->
-        <h2 id="Erste_Helden">Die ersten Helden</h2>
-        
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/1/5/6/1/51561-spider-man-0-2000-0-3000-crop.jpg?" alt="Spider-Man (2002)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man (2002)</div>
-                <div class="movie-desc">Der Schüler Peter Parker wird von einer genetisch veränderten Spinne gebissen und entwickelt Superkräfte, die er nach einer Tragödie nutzt, um als Spider-Man New York vor dem Grünen Troll zu schützen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/pq/mi/kb/ck/7JtMVM58MnzxWeyubzLpXBiVnDC-0-2000-0-3000-crop.jpg" alt="Spider-Man 2 (2004)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man 2 (2004)</div>
-                <div class="movie-desc">Peter kämpft mit den Belastungen seines Doppellebens und verliert zeitweise seine Kräfte, während der besessene Wissenschaftler Dr. Octopus die Stadt bedroht.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/gi/zi/fp/69/uC2pAMjb32NIgQ1GdC1Bl6LZJc2-0-2000-0-3000-crop.jpg" alt="Spider-Man 3 (2007)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man 3 (2007)</div>
-                <div class="movie-desc">Ein außerirdischer Symbiont verstärkt Peters dunkle Seiten, während er sich gleichzeitig Sandman, dem neuen Grünen Troll und Venom stellen muss.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/0/6/7/8/50678-hulk-0-2000-0-3000-crop.jpg" alt="Hulk (2003)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Hulk (2003)</div>
-                <div class="movie-desc">Der Wissenschaftler Bruce Banner rettet bei einem Laborunfall einen Kollegen und nimmt eine tödliche Dosis Gammastrahlung auf, was ihn fortan bei Wut in ein gigantisches grünes Monster verwandelt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/0/8/2/7/50827-the-incredible-hulk-0-2000-0-3000-crop.jpg" alt="Der unglaubliche Hulk (2008)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Der unglaubliche Hulk (2008)</div>
-                <div class="movie-desc">Bruce Banner ist auf der Flucht vor dem US-Militär untergetaucht und sucht verzweifelt nach einem Heilmittel, bis ein gieriger Soldat sich selbst in ein noch gefährlicheres Monster verwandelt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/0/8/2/5/50825-iron-man-0-2000-0-3000-crop.jpg?v=f03c15122c" alt="Iron Man (2008)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Iron Man (2008)</div>
-                <div class="movie-desc">Der Milliardär und Waffenhersteller Tony Stark baut nach einer Entführung eine verfeinerte Rüstung, um das Unrecht wiedergutzumachen, das seine eigenen Waffen angerichtet haben.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/6/5/1/1/46511-iron-man-2-0-2000-0-3000-crop.jpg" alt="Iron Man 2 (2010)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Iron Man 2 (2010)</div>
-                <div class="movie-desc">Tony Stark steht unter starkem Druck der Regierung, seine Technologie zu übergeben, während der Rachefeldzug des russischen Wissenschaftlers Ivan Vanko seine Existenz bedroht.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/6/4/5/6/46456-thor-0-2000-0-3000-crop.jpg" alt="Thor (2011)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Thor (2011)</div>
-                <div class="movie-desc">Der arrogante Donnergott Thor wird von seinem Vater Odin auf die Erde verbannt und muss ohne seine Kräfte lernen, was es bedeutet, ein wahrer Held zu sein.</div>
-            </div>
-        </div>
-
-        <!-- Sektion 2 -->
-        <h2 id="Erste_Avengers">Der Start des MCU - Die ersten Avengers</h2>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/0/8/0/9/50809-captain-america-the-first-avenger-0-2000-0-3000-crop.jpg" alt="Captain America: The First Avenger (2011)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Captain America: The First Avenger (2011)</div>
-                <div class="movie-desc">Der kränkliche Rekrut Steve Rogers wird während des Zweiten Weltkriegs durch ein Supersoldaten-Serum zum Hoffnungsträger Captain America und kämpft gegen die Geheimorganisation HYDRA.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/3/6/7/7/8/36778-the-avengers-2012-0-2000-0-3000-crop.jpg" alt="Marvel’s The Avengers (2012)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Marvel’s The Avengers (2012)</div>
-                <div class="movie-desc">Als Thors hinterlistiger Bruder Loki die Erde mit einer Außerirdischen-Armee bedroht, stellt Nick Fury erstmals das Team aus Iron Man, Cap, Thor, Hulk, Black Widow und Hawkeye zusammen.</div>
-            </div>
-        </div>
-
-        <!-- Sektion 3 -->
-        <h2 id="Neue_Helden">Neue Helden im MCU</h2>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/0/6/7/7/50677-the-amazing-spider-man-0-2000-0-3000-crop.jpg" alt="The Amazing Spider-Man (2012)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">The Amazing Spider-Man (2012)</div>
-                <div class="movie-desc">In dieser Neuinterpretation kommt der Highschool-Schüler Peter Parker dem Verschwinden seiner Eltern auf die Spur und muss New York vor dem mutierten Wissenschaftler "Echse" retten.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/5r/0i/96/db/7XiGqZE8meUv7L4720L0tIDd7gO-0-2000-0-3000-crop.jpg" alt="Iron Man 3 (2013)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Iron Man 3 (2013)</div>
-                <div class="movie-desc">Ein traumatisierter Tony Stark muss sich ohne die Hilfe seiner fortgeschrittenen Rüstungen einem mysteriösen Terroristen namens Mandarin stellen, der sein Privatleben zerstört.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/pc/xw/7h/17/bnX5PqAdQZRXSw3aX3DutDcdso5-0-2000-0-3000-crop.jpg" alt="Thor: The Dark Kingdom (2013)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Thor: The Dark Kingdom (2013)</div>
-                <div class="movie-desc">Thor muss sich mit seinem inhaftierten Bruder Loki verbünden, um das Universum vor den Urzeit-Dunkelelfen unter der Führung von Malekith zu retten.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/fs/xh/ms/hx/9HFdUfEuvbsaBfroPZNeDiA9W9-0-2000-0-3000-crop.jpg" alt="The Amazing Spider-Man 2 (2014)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">The Amazing Spider-Man 2 (2014)</div>
-                <div class="movie-desc">Peter Parker kämpft mit dem Versprechen an Gwendolyns Vater, während der von Elektrizität getriebene Electro und sein alter Freund Harry Osborn die Stadt bedrohen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/he/p6/cc/lg/zt6b493XEL2OQ1bCSKccZ7V0iRY-0-2000-0-3000-crop.jpg" alt="Captain America: The Return of the First Avenger (2014)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Captain America: The Return of the First Avenger (2014)</div>
-                <div class="movie-desc">Steve Rogers deckt eine Verschwörung innerhalb von S.H.I.E.L.D. auf und wird dabei von einem gehirngewaschenen Attentäter aus seiner eigenen Vergangenheit konfrontiert.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/1g/4f/6e/5b/prvWMj8cBFgVn5MLlsjlvH2hiIh-0-2000-0-3000-crop.jpg" alt="Guardians of the Galaxy (2014)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Guardians of the Galaxy (2014)</div>
-                <div class="movie-desc">Eine bunt zusammengewürfelte Truppe von Weltraum-Außenseitern rund um Peter Quill schließt sich zusammen, um einen mächtigen kosmischen Stein vor dem Kree-Krieger Ronan zu beschützen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/8/1/6/0/5/81605-avengers-age-of-ultron-0-2000-0-3000-crop.jpg" alt="Avengers: Age of Ultron (2015)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Avengers: Age of Ultron (2015)</div>
-                <div class="movie-desc">Als Tony Starks künstliche Intelligenz Ultron ein eigenes Bewusstsein entwickelt und die Menschheit auslöschen will, müssen die Avengers ihre internen Konflikte überwinden.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/8/3/5/5/7/83557-ant-man-0-2000-0-3000-crop.jpg" alt="Ant-Man (2015)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Ant-Man (2015)</div>
-                <div class="movie-desc">Der Meisterdieb Scott Lang bekommt einen Anzug geschenkt, der ihn auf Ameisengröße schrumpfen lässt, und muss verhindern, dass diese Technologie für militärische Zwecke missbraucht wird.</div>
-            </div>
-        </div>
-
-        <!-- Sektion 4 -->
-        <h2 id="Infinity_Krieg">Der Infinity-Krieg und der Start in das Multiversum</h2>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/2/0/5/7/5/220575-deadpool-0-2000-0-3000-crop.jpg?" alt="Deadpool (2016)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Deadpool (2016)</div>
-                <div class="movie-desc">Der krebskranke Ex-Söldner Wade Wilson erhält durch illegale Gen-Experimente Selbstheilungskräfte und begibt sich als durchgeknallter Antiheld auf die Jagd nach dem Mann, der sein Gesicht entstellt hat.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/1/9/4/4/0/2/194402-captain-america-civil-war-0-2000-0-3000-crop.jpg" alt="Captain America: Civil War (2016)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Captain America: Civil War (2016)</div>
-                <div class="movie-desc">Der Streit über die staatliche Kontrolle von Superhelden spaltet die Avengers in zwei verfeindete Lager unter der Führung von Captain America und Iron Man.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/0/9/3/8/1/209381-doctor-strange-0-2000-0-3000-crop.jpg" alt="Doctor Strange (2016)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Doctor Strange (2016)</div>
-                <div class="movie-desc">Nach einem schweren Autounfall sucht der arrogante Neurochirurg Stephen Strange Heilung in Nepal und wird dort in die Welt der mystischen Künste und Magie eingeführt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/sm/upload/1g/4f/6e/5b/prvWMj8cBFgVn5MLlsjlvH2hiIh-0-2000-0-3000-crop.jpg" alt="Guardians of the Galaxy Vol. 2 (2017)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Guardians of the Galaxy Vol. 2 (2017)</div>
-                <div class="movie-desc">Während die Guardians weiterhin das Weltall beschützen, trifft Peter Quill auf seinen leiblichen Vater Ego, der ein dunkles, galaktisches Geheimnis verbirgt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/4/2/7/1/0/242710-spider-man-homecoming-0-2000-0-3000-crop.jpg" alt="Spider-Man: Homecoming (2017)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man: Homecoming (2017)</div>
-                <div class="movie-desc">Der junge Peter Parker versucht unter den Fittichen von Mentor Tony Stark den Schulalltag zu bewältigen, legt sich dabei jedoch auf eigene Faust mit dem Waffen-Schmuggler Vulture an.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/0/9/3/8/2/209382-thor-ragnarok-0-2000-0-3000-crop.jpg" alt="Thor: Tag der Entscheidung (2017)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Thor: Tag der Entscheidung (2017)</div>
-                <div class="movie-desc">Thor verliert seinen Hammer, wird auf einem Müllplaneten gefangen genommen und muss in einer Gladiatoren-Arena gegen den Hulk antreten, um Asgard zu retten.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/0/9/3/8/3/209383-black-panther-0-2000-0-3000-crop.jpg" alt="Black Panther (2018)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Black Panther (2018)</div>
-                <div class="movie-desc">Prinz T'Challa kehrt nach dem Tod seines Vaters in das technologisch hochentwickelte, isolierte Königreich Wakanda zurück, um seinen Thron gegen einen finsteren Herausforderer zu verteidigen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/3/1/8/1/9/5/318195-deadpool-2-0-2000-0-3000-crop.jpg" alt="Deadpool 2 (2018)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Deadpool 2 (2018)</div>
-                <div class="movie-desc">Wade Wilson gründet die chaotische Truppe "X-Force", um einen jungen Mutanten vor dem zeitreisenden Cyborg-Soldaten Cable zu beschützen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/2/6/6/6/1/226661-avengers-infinity-war-0-2000-0-3000-crop.jpg" alt="Avengers: Infinity War (2018)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Avengers: Infinity War (2018)</div>
-                <div class="movie-desc">Der mächtige Titan Thanos sammelt die sechs Infinity-Steine im Universum, um die Hälfte aller Lebewesen mit einem Schnipsen auszulöschen – die Avengers stellen sich ihm vergeblich entgegen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/9/6/3/4/1/296341-ant-man-and-the-wasp-0-2000-0-3000-crop.jpg" alt="Ant-Man and the Wasp (2018)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Ant-Man and the Wasp (2018)</div>
-                <div class="movie-desc">Scott Lang schließt sich mit Hope van Dyne zusammen, um in das Quantenreich vorzudringen und Hopes Mutter zu retten, während er gleichzeitig unter Hausarrest steht.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/2/6/7/5/0/226750-captain-marvel-0-2000-0-3000-crop.jpg" alt="Captain Marvel (2019)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Captain Marvel (2019)</div>
-                <div class="movie-desc">In den 1990er-Jahren gerät die Kree-Kriegerin Vers auf die Erde und deckt gemeinsam mit dem jungen S.H.I.E.L.D.-Agenten Nick Fury ihre eigene, menschliche Vergangenheit auf.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/2/2/6/6/6/0/226660-avengers-endgame-0-2000-0-3000-crop.jpg" alt="Avengers: Endgame (2019)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Avengers: Endgame (2019)</div>
-                <div class="movie-desc">Fünf Jahre nach Thanos' verheerendem Schnipsen nutzen die überlebenden Helden Zeitreisen durch das Quantenreich, um die Steine aus der Vergangenheit zu holen und ihre Freunde zurückzubringen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/3/6/2/9/7/7/362977-spider-man-far-from-home-0-2000-0-3000-crop.jpg" alt="Spider-Man: Far From Home (2019)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man: Far From Home (2019)</div>
-                <div class="movie-desc">Auf einer Schulfahrt durch Europa wird Peter Parker von Nick Fury rekrutiert, um an der Seite des mysteriösen Mysterio gegen gigantische Elementar-Monster zu kämpfen.</div>
-            </div>
-        </div>
-
-        <!-- Sektion 5 -->
-        <h2 id="Multiversum">Das Multiversum & die Zusammenführung</h2>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/2/7/8/0/7/427807-black-widow-0-2000-0-3000-crop.jpg" alt="Black Widow (2021)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Black Widow (2021)</div>
-                <div class="movie-desc">Natasha Romanoff muss sich nach den Ereignissen von Civil War ihrer eigenen Vergangenheit im russischen Ausbildungsprogramm stellen und trifft auf ihre frühere "Ersatzfamilie".</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/9/4/9/6/9/494969-shang-chi-and-the-legend-of-the-ten-rings-0-2000-0-3000-crop.jpg" alt="Shang-Chi (2021)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Shang-Chi (2021)</div>
-                <div class="movie-desc">Ein junger Kampfsportler wird von seiner Vergangenheit eingeholt, muss sich seinem Vater stellen und wird am Ende direkt im Kreis der Avengers aufgenommen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/6/0/7/8/7/560787-spider-man-no-way-home-0-2000-0-3000-crop.jpg" alt="Spider-Man: No Way Home (2021)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Spider-Man: No Way Home (2021)</div>
-                <div class="movie-desc">Ein verpatzter Zauberspruch von Doctor Strange reißt Löcher ins Multiversum und bringt die Schurken sowie die Spider-Men aus den früheren Filmreihen in die MCU-Welt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/3/8/5/5/1/1/385511-doctor-strange-in-the-multiverse-of-madness-0-2000-0-3000-crop.jpg" alt="Doctor Strange in the Multiverse of Madness (2022)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Doctor Strange in the Multiverse of Madness (2022)</div>
-                <div class="movie-desc">Doctor Strange reist mit der Teenagerin America Chavez durch gefährliche Parallelwelten, um sie vor einer von der Magie korrumpierten Wanda Maximoff zu beschützen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/4/3/0/0/2/543002-thor-love-and-thunder-0-2000-0-3000-crop.jpg" alt="Thor: Love and Thunder (2022)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Thor: Love and Thunder (2022)</div>
-                <div class="movie-desc">Thor schließt sich mit seiner Ex-Freundin Jane Foster zusammen, die nun den Hammer Mjolnir führt, um den schrecklichen Götterschlächter Gorr aufzuhalten.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/3/5/4/6/0/435460-black-panther-wakanda-forever-0-2000-0-3000-crop.jpg" alt="Black Panther: Wakanda Forever (2022)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Black Panther: Wakanda Forever (2022)</div>
-                <div class="movie-desc">Nach dem Tod von König T'Challa muss Wakanda um seine Trauer kämpfen und sich gleichzeitig gegen das Volk des Unterwasser-Herrschers Namor verteidigen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/6/6/2/3/7/566237-ant-man-and-the-wasp-quantumania-0-2000-0-3000-crop.jpg" alt="Ant-Man and the Wasp: Quantumania (2023)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Ant-Man and the Wasp: Quantumania (2023)</div>
-                <div class="movie-desc">Scott Lang und seine Familie werden versehentlich tief in das Quantenreich gezogen und treffen dort auf den zeitreisenden Eroberer Kang.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/3/7/9/7/1/1/379711-guardians-of-the-galaxy-volume-3-0-2000-0-3000-crop.jpg" alt="Guardians of the Galaxy Vol. 3 (2023)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Guardians of the Galaxy Vol. 3 (2023)</div>
-                <div class="movie-desc">Die Guardians begeben sich auf eine gefährliche Rettungsmission für ihren Freund Rocket und müssen sich dessen grausamem Schöpfer, dem High Evolutionary, stellen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/3/6/9/7/0/536970-the-marvels-0-2000-0-3000-crop.jpg" alt="The Marvels (2023)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">The Marvels (2023)</div>
-                <div class="movie-desc">Captain Marvel, Monica Rambeau und Kamala Khan tauschen durch eine Quanten-Verstrickung jedes Mal die Plätze, wenn sie ihre Kräfte einsetzen, und müssen lernen, als Team zu arbeiten.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/6/2/8/7/0/462870-deadpool-wolverine-0-2000-0-3000-crop.jpg" alt="Deadpool & Wolverine (2024)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Deadpool & Wolverine (2024)</div>
-                <div class="movie-desc">Die Time Variance Authority (TVA) reißt Deadpool aus seinem Alltag, woraufhin er sich widerwillig mit einem gebrochenen Wolverine aus einem anderen Universum verbünden muss.</div>
-            </div>
-        </div>
-
-        <!-- Sektion 6 -->
-        <h2 id="Neue_Aera">Der Anbruch einer neuen Ära</h2>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/4/5/4/0/1/6/454016-eternals-0-2000-0-3000-crop.jpg" alt="Eternals (2021)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Eternals (2021)</div>
-                <div class="movie-desc">Als die mächtigen Syntheten-Krieger Eternals nach Jahrtausenden aus der Verborgenheit treten, um die Menschheit vor Bestien zu beschützen, verhindern sie den Ausbruch eines riesigen Welten-Schöpfers – dessen versteinerter Giganten-Körper fortan als Monument im Ozean verbleibt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/7/3/8/2/9/2/738292-captain-america-brave-new-world-0-2000-0-3000-crop.jpg" alt="Captain America: Brave New World (2025)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Captain America: Brave New World (2025)</div>
-                <div class="movie-desc">Sam Wilson muss sich als neuer Captain America ohne Super-Serum beweisen und deckt eine Verschwörung im Weißen Haus auf. Der Kampf um das neue Wunder-Metall Adamantium führt zum Clash mit Präsident Ross, der sich in den unberechenbaren Red Hulk verwandelt.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/8/8/7/6/5/3/887653-thunderbolts-0-2000-0-3000-crop.jpg" alt="Thunderbolts* (2025)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Thunderbolts* (2025)</div>
-                <div class="movie-desc">Ein Team aus gescheiterten Antihelden und Ex-Schurken (u. a. Yelena Belova und Bucky Barnes) wird in eine Falle gelockt. Sie müssen wider Willen zusammenarbeiten, um zu überleben und ihre dunkle Vergangenheit zu überwinden.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/5/4/3/9/6/7/543967-the-fantastic-four-first-steps-0-2000-0-3000-crop.jpg" alt="The Fantastic 4: First Steps (2025)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">The Fantastic 4: First Steps (2025)</div>
-                <div class="movie-desc">Marvels legendäre Erstlings-Familie startet in einem stilvollen 60er-Jahre-Paralleluniversum. Als das gigantische Kosmos-Wesen Galactus ihre Erde bedroht, stellt sich das Team dem Weltuntergang – und ebnet den Weg zum nächsten Avengers-Multiversums-Event.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/9/0/3/8/8/9/903889-avengers-doomsday-0-2000-0-3000-crop.jpg" alt="Avengers: Doomsday (2026)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Avengers: Doomsday (2026)</div>
-                <div class="movie-desc">Als der mächtige Meisterstratege Doctor Doom die Existenz des gesamten Multiversums bedroht, müssen sich die Helden der neuen Ära – von den Avengers über die Thunderbolts bis hin zu den Fantastic Four – für eine epische Abwehrschlacht zusammenschließen.</div>
-            </div>
-        </div>
-
-        <div class="movie-card" onclick="openOverlay(this)">
-            <div class="movie-poster">
-                <img src="https://a.ltrbxd.com/resized/film-poster/9/0/3/8/9/0/903890-avengers-secret-wars-0-2000-0-3000-crop.jpg" alt="Avengers: Secret Wars (2027)">
-            </div>
-            <div class="movie-content">
-                <div class="movie-title">Avengers: Secret Wars (2027)</div>
-                <div class="movie-desc">In der ultimativen Schicksalsschlacht treffen die Helden und Welten der gesamten Marvel-Kinogeschichte aufeinander, um den endgültigen Kollaps der Realitäten abzuwenden und das Multiversum neu zu ordnen.</div>
-            </div>
-        </div>
     </div>
 
     <!-- Fixierter Footer unten -->
@@ -868,6 +501,137 @@
     <div id="poster-overlay" onclick="closeOverlay()">
         <img id="overlay-img" src="" alt="Großes Poster">
     </div>
+
+    <script>
+        // ================================================================
+        // FILM-DATENBANK
+        // Neue Filme hinzufügen, Reihenfolge ändern oder Sektionen anpassen:
+        // Einfach hier im Array editieren - der Rest rendert sich automatisch.
+        // Jede Sektion braucht: id (für Anker-Links, ohne Leerzeichen),
+        // title (Überschrift im Text), navLabel (Kurzform fürs Menü)
+        // und movies[] mit title, poster (Bild-URL) und desc.
+        // ================================================================
+        // Filmdaten werden zur Laufzeit aus moviedata.json geladen (siehe unten fetchAndRender()).
+        let MOVIE_DATA = [];
+
+        // Escaped Sonderzeichen, damit Titel/Beschreibungen nie HTML brechen
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderNav() {
+            const nav = document.getElementById('mobileNav');
+            const closeButton = `<button class="nav-close" onclick="toggleSidebar()" aria-label="Menü schließen">✕</button>`;
+            const homeLink = `<a href="#top" class="nav-home" onclick="goHome(event)" aria-label="Zur Startseite">🏠 Home</a>`;
+            const links = MOVIE_DATA.map((section, i) =>
+                `<a href="#${section.id}" onclick="closeSidebar()">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
+            ).join('');
+            nav.innerHTML = closeButton + homeLink + links;
+        }
+
+        // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
+        function goHome(event) {
+            event.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            closeSidebar();
+        }
+
+        // --- Bewertungssystem (0-5 Popcorn-Tüten), NUR lokal im Browser gespeichert ---
+        // Nutzt localStorage - die Bewertung bleibt auf diesem Gerät/Browser und
+        // wird nirgendwo hochgeladen oder synchronisiert.
+        function ratingKey(movieId) {
+            return 'mcu-rating-' + movieId;
+        }
+
+        function getRating(movieId) {
+            try {
+                return parseInt(localStorage.getItem(ratingKey(movieId)) || '0', 10);
+            } catch (e) {
+                return 0; // z.B. privates Surfen ohne Storage-Zugriff
+            }
+        }
+
+        function setRating(movieId, value, event) {
+            event.stopPropagation(); // verhindert, dass die Karte das Poster-Overlay öffnet
+            const current = getRating(movieId);
+            const next = (current === value) ? 0 : value; // erneutes Antippen setzt zurück
+            try {
+                localStorage.setItem(ratingKey(movieId), String(next));
+            } catch (e) {
+                console.warn('Bewertung konnte nicht gespeichert werden:', e);
+            }
+            updateRatingDisplay(movieId);
+        }
+
+        function updateRatingDisplay(movieId) {
+            const widget = document.querySelector('.movie-rating[data-movie-id="' + movieId + '"]');
+            if (!widget) return;
+            const current = getRating(movieId);
+            widget.querySelectorAll('.popcorn').forEach(el => {
+                const val = parseInt(el.dataset.value, 10);
+                el.classList.toggle('filled', val <= current);
+            });
+        }
+
+        function renderRatingWidget(movieId) {
+            const current = getRating(movieId);
+            const bags = [1, 2, 3, 4, 5].map(i => {
+                const filled = i <= current ? ' filled' : '';
+                return `<span class="popcorn${filled}" data-value="${i}" onclick="setRating('${movieId}', ${i}, event)" role="button" aria-label="${i} von 5 Popcorn-Tüten bewerten">🍿</span>`;
+            }).join('');
+            return `<div class="movie-rating" data-movie-id="${movieId}">${bags}</div>`;
+        }
+
+        function renderMovieCard(movie) {
+            return `
+        <div class="movie-card" onclick="openOverlay(this)">
+            <div class="movie-poster">
+                <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy">
+            </div>
+            <div class="movie-content">
+                <div class="movie-title">${escapeHtml(movie.title)}</div>
+                <div class="movie-desc">${escapeHtml(movie.desc)}</div>
+                ${renderRatingWidget(movie.id)}
+            </div>
+        </div>`;
+        }
+
+        function renderContent() {
+            const container = document.querySelector('.container.content-wrapper');
+            const html = MOVIE_DATA.map(section => `
+        <h2 id="${section.id}">${escapeHtml(section.title)}</h2>
+        ${section.movies.map(renderMovieCard).join('')}
+            `).join('');
+            container.innerHTML = html;
+        }
+
+        // Lädt moviedata.json und rendert erst danach Navigation und Filmkarten.
+        // Hinweis: fetch() auf eine lokale Datei funktioniert nur über http(s) -
+        // z. B. auf GitHub Pages, oder lokal über einen einfachen Webserver
+        // (python3 -m http.server), NICHT per Doppelklick/file://.
+        async function fetchAndRender() {
+            const container = document.querySelector('.container.content-wrapper');
+            try {
+                const response = await fetch('moviedata.json');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                MOVIE_DATA = await response.json();
+                renderNav();
+                renderContent();
+            } catch (err) {
+                console.error('Konnte moviedata.json nicht laden:', err);
+                container.innerHTML =
+                    '<p style="text-align:center; padding: 40px 10px;">' +
+                    'Filmdaten konnten nicht geladen werden. Läuft die Seite über ' +
+                    'http(s) (z. B. GitHub Pages oder einen lokalen Webserver) und ' +
+                    'liegt <code>moviedata.json</code> im selben Ordner wie diese Datei?' +
+                    '</p>';
+            }
+        }
+
+        fetchAndRender();
+    </script>
 
     <script>
         function openOverlay(cardElement) {
@@ -885,10 +649,30 @@
             overlay.style.display = 'none';
         }
 
-        // Funktion zum Ein- und Ausklappen der linken Sidebar auf Mobile
+        // ESC schließt Poster-Overlay bzw. Navigations-Drawer
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeOverlay();
+                closeSidebar();
+            }
+        });
+
+        // Funktion zum Ein- und Ausklappen des Navigations-Drawers auf Mobile
         function toggleSidebar() {
             const sidebar = document.getElementById('mobileNav');
-            sidebar.classList.toggle('open');
+            const backdrop = document.getElementById('navBackdrop');
+            const toggleBtn = document.getElementById('navToggle');
+            const isOpen = sidebar.classList.toggle('open');
+            backdrop.classList.toggle('open', isOpen);
+            toggleBtn.classList.toggle('open', isOpen);
+            toggleBtn.setAttribute('aria-label', isOpen ? 'Menü schließen' : 'Menü öffnen');
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('mobileNav');
+            if (sidebar.classList.contains('open')) {
+                toggleSidebar();
+            }
         }
 
         // Touch-Gestenerkennung für Wischfunktion (Swipe)
