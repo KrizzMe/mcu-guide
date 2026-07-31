@@ -432,6 +432,12 @@
                 color: var(--text-muted);
                 text-decoration: none;
                 border: 1px solid var(--border-color);
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: rgba(255,255,255,0.15);
+            }
+
+            .quick-nav.mobile-sidebar {
+                touch-action: pan-y;
             }
 
             .quick-nav.mobile-sidebar a:active,
@@ -527,12 +533,22 @@
 
         function renderNav() {
             const nav = document.getElementById('mobileNav');
-            const closeButton = `<button class="nav-close" onclick="toggleSidebar()" aria-label="Menü schließen">✕</button>`;
-            const homeLink = `<a href="#top" class="nav-home" onclick="goHome(event)" aria-label="Zur Startseite">🏠 Start</a>`;
+            const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
+            const homeLink = `<a href="#top" class="nav-home" aria-label="Zur Startseite">🏠 Start</a>`;
             const links = MOVIE_DATA.map((section, i) =>
-                `<a href="#${section.id}" onclick="goToSection(event, '${section.id}')">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
+                `<a href="#${section.id}" data-section-id="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
             ).join('');
             nav.innerHTML = closeButton + homeLink + links;
+
+            // Klick-Handler per addEventListener statt Inline-onclick binden.
+            // Robuster als String-Interpolation in onclick-Attributen, da so
+            // keine Sonderzeichen (Anführungszeichen o.ä.) in IDs die
+            // generierten Attribute versehentlich zerstören können.
+            nav.querySelector('.nav-close').addEventListener('click', toggleSidebar);
+            nav.querySelector('.nav-home').addEventListener('click', goHome);
+            nav.querySelectorAll('a[data-section-id]').forEach(link => {
+                link.addEventListener('click', event => goToSection(event, link.dataset.sectionId));
+            });
         }
 
         // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
@@ -556,6 +572,8 @@
                 setTimeout(() => {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 60);
+            } else {
+                console.warn('Ziel-Sektion nicht gefunden:', sectionId);
             }
         }
 
