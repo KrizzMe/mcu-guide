@@ -524,9 +524,9 @@
         function renderNav() {
             const nav = document.getElementById('mobileNav');
             const closeButton = `<button class="nav-close" onclick="toggleSidebar()" aria-label="Menü schließen">✕</button>`;
-            const homeLink = `<a href="#top" class="nav-home" onclick="goHome(event)" aria-label="Zur Startseite">🏠 Home</a>`;
+            const homeLink = `<a href="#top" class="nav-home" onclick="goHome(event)" aria-label="Zur Startseite">🏠 Start</a>`;
             const links = MOVIE_DATA.map((section, i) =>
-                `<a href="#${section.id}" onclick="closeSidebar()">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
+                `<a href="#${section.id}" onclick="goToSection(event, '${section.id}')">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
             ).join('');
             nav.innerHTML = closeButton + homeLink + links;
         }
@@ -536,6 +536,23 @@
             event.preventDefault();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             closeSidebar();
+        }
+
+        // Scrollt gezielt zu einer Sektion. Wird per JS statt per nativem
+        // Anker-Sprung erledigt, da der native Sprung in manchen mobilen
+        // Browsern nicht zuverlässig funktioniert, wenn der Link in einem
+        // Container mit CSS-"transform" liegt (unser Slide-in-Menü).
+        function goToSection(event, sectionId) {
+            event.preventDefault();
+            const target = document.getElementById(sectionId);
+            closeSidebar();
+            if (target) {
+                // kurze Verzögerung, damit die Schließen-Animation des Menüs
+                // den Scrollvorgang nicht stört
+                setTimeout(() => {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 60);
+            }
         }
 
         // --- Bewertungssystem (0-5 Popcorn-Tüten), NUR lokal im Browser gespeichert ---
