@@ -209,16 +209,25 @@
             text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
+        /* Desktop: Poster-Bleed-Effekt (Issue #14).
+           aspect-ratio 50/11 koppelt die Kartenhöhe an die Poster-Breite (22%),
+           sodass der sichtbare Poster-Ausschnitt quadratisch ist. Da die Poster
+           im Format 2:3 vorliegen, entspricht ein quadratischer Ausschnitt mit
+           object-position:top exakt den oberen 2/3 des Posters - Gesichter/Köpfe
+           bleiben dadurch zuverlässig sichtbar. */
         .movie-card {
+            position: relative;
+            overflow: hidden;
             background-color: var(--card-bg);
             backdrop-filter: blur(5px);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 20px;
+            padding: 0;
             margin-bottom: 15px;
             display: flex;
-            gap: 20px;
+            gap: 0;
             align-items: stretch;
+            aspect-ratio: 50 / 11;
             cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
@@ -237,13 +246,14 @@
         }
 
         .movie-poster {
-            flex-shrink: 0;
-            align-self: center;
-            width: 80px;
-            height: 120px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 22%;
+            height: 100%;
             background-color: #2a2a2a;
-            border-radius: 4px;
-            border: 1px dashed #555;
+            border: none;
+            border-radius: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -251,18 +261,33 @@
             font-size: 0.75rem;
             color: var(--text-muted);
             overflow: hidden;
+            -webkit-mask-image: linear-gradient(to right, black 58%, transparent 96%);
+            mask-image: linear-gradient(to right, black 58%, transparent 96%);
         }
 
         .movie-poster img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: top;
         }
 
+        /* Rückwärts-Verlauf sorgt dafür, dass der Text auch über der
+           ausfadenden Poster-Kante lesbar bleibt. Vertikal zentriert, damit
+           bei kurzen Beschreibungen kein großer Leerraum unten entsteht. */
         .movie-content {
+            position: relative;
+            z-index: 1;
             flex-grow: 1;
+            margin-left: 19%;
+            padding: 18px 24px 18px 16px;
             display: flex;
             flex-direction: column;
+            justify-content: center;
+            background: linear-gradient(to right,
+                rgba(30, 30, 30, 0) 0%,
+                var(--card-bg) 30%,
+                var(--card-bg) 100%);
         }
 
         .movie-title-row {
@@ -588,6 +613,10 @@
                 overflow: hidden;
                 padding: 0;
                 gap: 0;
+                /* Desktop koppelt Kartenhöhe per aspect-ratio an die
+                   Poster-Breite - auf Mobile richtet sich die Höhe dagegen
+                   nach dem Inhalt, daher hier zurücksetzen. */
+                aspect-ratio: auto;
             }
 
             .movie-poster {
@@ -597,6 +626,11 @@
                 height: 100%;
                 border: none;
                 border-radius: 0;
+                /* Desktop nutzt eine horizontale Mask für den seitlichen
+                   Fade - auf Mobile übernimmt das der ::after-Verlauf
+                   (vertikal), daher Mask hier deaktivieren. */
+                -webkit-mask-image: none;
+                mask-image: none;
             }
 
             .movie-poster::after {
@@ -619,6 +653,10 @@
                 z-index: 1;
                 margin-left: 0;
                 padding: 195px 14px 14px;
+                /* Desktop-Rückwärtsverlauf und vertikale Zentrierung gelten
+                   nur dort - auf Mobile liegt der Text unter dem Poster. */
+                background: none;
+                justify-content: flex-start;
             }
 
             .movie-title,
