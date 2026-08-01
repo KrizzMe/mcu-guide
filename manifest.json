@@ -8,8 +8,9 @@
   "icons": [
     {
       "src": "m.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "sizes": "444x444",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
