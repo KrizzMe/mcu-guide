@@ -174,9 +174,14 @@
             display: none;
         }
 
-        /* Standard Abstandhalter für Desktop */
+        /* Standard Abstandhalter für Desktop.
+           padding-bottom reserviert Platz für den fixierten Footer unten -
+           ohne das würde die letzte Filmkarte teilweise dahinter
+           verschwinden (Bug #15). Footer ist ca. 37px hoch (Text + Padding
+           + Border), 60px lässt komfortablen Sicherheitsabstand. */
         .content-wrapper {
             margin-top: 150px;
+            padding-bottom: 60px;
         }
 
         h2 {
@@ -510,9 +515,12 @@
                 background-color: var(--accent-color);
             }
 
-            /* Abstandhalter oben dynamisch an die kleinere Header-Größe angepasst */
+            /* Abstandhalter oben dynamisch an die kleinere Header-Größe angepasst.
+               padding-bottom analog zu Desktop, an kleineren Mobile-Footer
+               angepasst (Bug #15) */
             .content-wrapper {
                 margin-top: clamp(60px, 12vw, 85px);
+                padding-bottom: 50px;
             }
 
             h2 {
