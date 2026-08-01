@@ -274,6 +274,21 @@
             object-position: top;
         }
 
+        /* Platzhalter, wenn ein Posterbild nicht geladen werden kann.
+           Verhindert das kaputte Bild-Symbol des Browsers. */
+        .movie-poster.poster-missing {
+            -webkit-mask-image: none;
+            mask-image: none;
+            background-color: #242424;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .movie-poster.poster-missing::before {
+            content: "🎬";
+            font-size: 1.8rem;
+            opacity: 0.35;
+        }
+
         /* Rückwärts-Verlauf sorgt dafür, dass der Text auch über der
            ausfadenden Poster-Kante lesbar bleibt. Vertikal zentriert, damit
            bei kurzen Beschreibungen kein großer Leerraum unten entsteht. */
@@ -650,6 +665,22 @@
                 object-position: top;
             }
 
+            /* Auf Mobile ist das Poster der Kartenhintergrund. Fehlt es, würde
+               oben ein großer leerer Bereich stehen bleiben - deshalb hier
+               Platzhalter-Symbol weglassen und den Textabstand zurücknehmen. */
+            .movie-poster.poster-missing {
+                background-color: transparent;
+                border-right: none;
+            }
+
+            .movie-poster.poster-missing::before {
+                content: none;
+            }
+
+            .movie-card.no-poster .movie-content {
+                padding-top: 14px;
+            }
+
             .movie-content {
                 position: relative;
                 z-index: 1;
@@ -914,7 +945,7 @@
             return `
         <div class="movie-card${watchedClass}" data-movie-id="${movie.id}" onclick="openOverlay(this)">
             <div class="movie-poster">
-                <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy">
+                <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="handlePosterError(this)">
             </div>
             <div class="movie-content">
                 <div class="movie-title-row">
@@ -944,23 +975,143 @@
         // Hinweis: fetch() auf eine lokale Datei funktioniert nur über http(s) -
         // z. B. auf GitHub Pages, oder lokal über einen einfachen Webserver
         // (python3 -m http.server), NICHT per Doppelklick/file://.
+        // Prüft die geladenen Daten Eintrag für Eintrag. Fehlerhafte Sektionen
+        // oder Filme werden übersprungen statt die komplette Seite lahmzulegen -
+        // ein vergessenes Komma bei einem Film soll nicht die anderen 46 kosten.
+        // Gibt {sections, skippedSections, skippedMovies} zurück.
+        function validateMovieData(raw) {
+            const result = { sections: [], skippedSections: 0, skippedMovies: 0 };
+
+            if (!Array.isArray(raw)) {
+                console.error('moviedata.json enthält kein Array auf oberster Ebene.');
+                return result;
+            }
+
+            raw.forEach((section, sIdx) => {
+                if (!section || typeof section !== 'object') {
+                    console.warn(`Sektion ${sIdx + 1} übersprungen: kein gültiges Objekt.`);
+                    result.skippedSections++;
+                    return;
+                }
+                if (!section.id || !section.title) {
+                    console.warn(`Sektion ${sIdx + 1} übersprungen: "id" oder "title" fehlt.`, section);
+                    result.skippedSections++;
+                    return;
+                }
+                if (!Array.isArray(section.movies)) {
+                    console.warn(`Sektion "${section.title}" übersprungen: "movies" ist kein Array.`);
+                    result.skippedSections++;
+                    return;
+                }
+
+                const validMovies = [];
+                section.movies.forEach((movie, mIdx) => {
+                    if (!movie || typeof movie !== 'object') {
+                        console.warn(`Film ${mIdx + 1} in "${section.title}" übersprungen: kein gültiges Objekt.`);
+                        result.skippedMovies++;
+                        return;
+                    }
+                    if (!movie.id || !movie.title) {
+                        console.warn(`Film ${mIdx + 1} in "${section.title}" übersprungen: "id" oder "title" fehlt.`, movie);
+                        result.skippedMovies++;
+                        return;
+                    }
+                    // Fehlende optionale Felder sind kein Grund zum Überspringen -
+                    // lieber den Film mit Lücke zeigen als gar nicht.
+                    validMovies.push({
+                        ...movie,
+                        desc: movie.desc || '',
+                        poster: movie.poster || '',
+                        runtime: movie.runtime || ''
+                    });
+                });
+
+                result.sections.push({
+                    ...section,
+                    navLabel: section.navLabel || section.title,
+                    movies: validMovies
+                });
+            });
+
+            return result;
+        }
+
+        // Springt ein Posterbild nicht an (Datei fehlt, falscher Pfad, offline),
+        // wird statt des kaputten Bild-Symbols ein Platzhalter angezeigt.
+        function handlePosterError(imgElement) {
+            const poster = imgElement.closest('.movie-poster');
+            const card = imgElement.closest('.movie-card');
+            imgElement.remove();
+            if (poster) poster.classList.add('poster-missing');
+            if (card) card.classList.add('no-poster');
+            console.warn('Poster konnte nicht geladen werden:', imgElement.getAttribute('src'));
+        }
+
         async function fetchAndRender() {
             const container = document.querySelector('.container.content-wrapper');
             try {
                 const response = await fetch('moviedata.json');
                 if (!response.ok) throw new Error('HTTP ' + response.status);
-                MOVIE_DATA = await response.json();
+
+                let raw;
+                try {
+                    raw = await response.json();
+                } catch (parseErr) {
+                    // JSON-Syntaxfehler getrennt behandeln - andere Ursache,
+                    // andere Lösung als ein fehlgeschlagener Download.
+                    throw new Error('INVALID_JSON');
+                }
+
+                const { sections, skippedSections, skippedMovies } = validateMovieData(raw);
+
+                if (sections.length === 0) {
+                    throw new Error('NO_VALID_DATA');
+                }
+
+                MOVIE_DATA = sections;
                 renderNav();
                 renderContent();
+
+                if (skippedSections > 0 || skippedMovies > 0) {
+                    console.warn(
+                        `Hinweis: ${skippedSections} Sektion(en) und ${skippedMovies} Film(e) ` +
+                        'wurden wegen fehlerhafter Daten übersprungen. Details siehe Meldungen oben.'
+                    );
+                }
             } catch (err) {
-                console.error('Konnte moviedata.json nicht laden:', err);
-                container.innerHTML =
-                    '<p style="text-align:center; padding: 40px 10px;">' +
-                    'Filmdaten konnten nicht geladen werden. Läuft die Seite über ' +
-                    'http(s) (z. B. GitHub Pages oder einen lokalen Webserver) und ' +
-                    'liegt <code>moviedata.json</code> im selben Ordner wie diese Datei?' +
-                    '</p>';
+                console.error('Konnte Filmdaten nicht laden:', err);
+                container.innerHTML = buildErrorMessage(err);
             }
+        }
+
+        function buildErrorMessage(err) {
+            const wrap = (text) =>
+                '<p style="text-align:center; padding: 40px 16px; line-height: 1.7;">' + text + '</p>';
+
+            if (!navigator.onLine) {
+                return wrap(
+                    'Keine Internetverbindung. Die Filmdaten konnten nicht geladen werden - ' +
+                    'bitte Verbindung prüfen und die Seite neu laden.'
+                );
+            }
+            if (err && err.message === 'INVALID_JSON') {
+                return wrap(
+                    '<code>moviedata.json</code> konnte nicht gelesen werden - die Datei ist ' +
+                    'vermutlich fehlerhaft (z.&nbsp;B. ein fehlendes oder überzähliges Komma). ' +
+                    'Details stehen in der Browser-Konsole.'
+                );
+            }
+            if (err && err.message === 'NO_VALID_DATA') {
+                return wrap(
+                    'Die Filmdaten enthalten keine gültigen Einträge. ' +
+                    'Details stehen in der Browser-Konsole.'
+                );
+            }
+            return wrap(
+                'Filmdaten konnten nicht geladen werden. Läuft die Seite über ' +
+                'http(s) (z.&nbsp;B. GitHub Pages oder einen lokalen Webserver) und ' +
+                'liegt <code>moviedata.json</code> im selben Ordner wie diese Datei?'
+            );
         }
 
         fetchAndRender();
