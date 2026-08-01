@@ -148,18 +148,31 @@
         }
 
         .quick-nav a {
+            position: relative;
             color: var(--text-muted);
             text-decoration: none;
             font-size: 0.75rem;
             padding: 4px 10px;
             border-radius: 4px;
+            border: 1px solid transparent;
             background-color: rgba(255,255,255,0.05);
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, color 0.2s ease;
+            overflow: hidden;
         }
 
+        /* Hintergrund wird zur Laufzeit per JS als Fortschritts-Füllung
+           gesetzt (siehe applyNavFill) - je mehr Filme in dieser Sektion
+           (bzw. insgesamt beim Home-Button) als "gesehen" markiert sind,
+           desto weiter füllt sich der Button grün von links nach rechts. */
         .quick-nav a:hover {
             color: #ffffff;
-            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Zähler "(n/n)" im Nav-Button - auf Desktop ausgeblendet (Pills sind
+           dort bewusst kompakt), auf Mobile eingeblendet, siehe Media Query */
+        .nav-progress {
+            display: none;
         }
 
         /* Icon grau statt bunt - gleicher Look wie eine nicht bewertete
@@ -210,6 +223,14 @@
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
+        /* Statischer grüner Rand, sobald der Film bewertet ("gesehen") wurde -
+           analog zum roten Hover-Rand, aber dauerhaft sichtbar. Regel bewusst
+           VOR :hover platziert, damit ein Hover (rot) auch bei bereits
+           gesehenen Karten kurzzeitig Vorrang hat. */
+        .movie-card.watched {
+            border-color: #4caf50;
+        }
+
         .movie-card:hover {
             transform: translateY(-3px);
             border-color: var(--accent-color);
@@ -258,6 +279,20 @@
             font-weight: bold;
             color: #ffffff;
             min-width: 0;
+        }
+
+        /* --- Fortschritts-Anzeige (Issue #3) ---
+           Der frühere separate Fortschrittsbalken wurde entfernt - der
+           Fortschritt wird stattdessen direkt in die Navigations-Buttons
+           integriert (siehe applyNavFill im Script-Bereich). */
+
+        /* Zähler direkt neben der Sektions-Überschrift, bewusst nicht in
+           Akzentfarbe (h2 ist rot), damit er sich als Nebeninfo abhebt */
+        .section-count {
+            font-size: 0.9rem;
+            font-weight: normal;
+            color: var(--text-muted);
+            margin-left: 8px;
         }
 
         .movie-desc {
@@ -509,6 +544,15 @@
                 touch-action: pan-y;
             }
 
+            /* Zähler "(n/n)" nur im mobilen Drawer sichtbar - ergänzt die
+               grüne Füllung um genaue Zahlen für einen besseren Überblick */
+            .nav-progress {
+                display: inline;
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                margin-left: 4px;
+            }
+
             .quick-nav.mobile-sidebar a:active,
             .quick-nav.mobile-sidebar a:hover {
                 color: #ffffff;
@@ -666,9 +710,9 @@
         function renderNav() {
             const nav = document.getElementById('mobileNav');
             const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
-            const homeLink = `<a href="#top" class="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home</a>`;
+            const homeLink = `<a href="#top" class="nav-home" data-fill-key="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home <span class="nav-progress" data-progress-key="nav-home"></span></a>`;
             const links = MOVIE_DATA.map((section, i) =>
-                `<a href="#${section.id}" data-section-id="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)}</a>`
+                `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
             ).join('');
             nav.innerHTML = closeButton + homeLink + links;
 
@@ -712,6 +756,56 @@
         // --- Bewertungssystem (0-5 Popcorn-Tüten), NUR lokal im Browser gespeichert ---
         // Nutzt localStorage - die Bewertung bleibt auf diesem Gerät/Browser und
         // wird nirgendwo hochgeladen oder synchronisiert.
+        // --- "Gesehen"-Status (Issue #3), NUR lokal im Browser gespeichert ---
+        // Unabhängig von der Popcorn-Bewertung: reines Ja/Nein pro Film.
+        // Setzt den Hintergrund eines Nav-Buttons als Fortschritts-Füllung:
+        // links "pct" Prozent grün (gesehen), rest transparent/normal.
+        function applyNavFill(fillKey, pct) {
+            document.querySelectorAll('.quick-nav a[data-fill-key="' + fillKey + '"]').forEach(link => {
+                link.style.background =
+                    `linear-gradient(to right, rgba(76, 175, 80, 0.45) ${pct}%, rgba(255, 255, 255, 0.05) ${pct}%)`;
+            });
+        }
+
+        // Setzt den "(n/n)"-Text im Nav-Button (nur auf Mobile sichtbar,
+        // siehe .nav-progress CSS) - ergänzt die Füllung um genaue Zahlen.
+        function applyNavProgressText(progressKey, watched, total) {
+            document.querySelectorAll('.nav-progress[data-progress-key="' + progressKey + '"]').forEach(el => {
+                el.textContent = `(${watched}/${total})`;
+            });
+        }
+
+        // Ein Film gilt als "gesehen", sobald er bewertet wurde (Rating > 0).
+        // Bewusst kein eigener, separater Gesehen-Status mehr - eine Bewertung
+        // impliziert ja bereits, dass der Film geschaut wurde.
+        function updateProgress() {
+            let total = 0;
+            let watchedTotal = 0;
+
+            MOVIE_DATA.forEach(section => {
+                let sectionTotal = 0;
+                let sectionWatched = 0;
+                section.movies.forEach(movie => {
+                    sectionTotal++;
+                    total++;
+                    if (getRating(movie.id) > 0) {
+                        sectionWatched++;
+                        watchedTotal++;
+                    }
+                });
+                const counter = document.querySelector('.section-count[data-section-id="' + section.id + '"]');
+                if (counter) counter.textContent = `(${sectionWatched}/${sectionTotal})`;
+
+                const sectionPct = sectionTotal > 0 ? (sectionWatched / sectionTotal * 100) : 0;
+                applyNavFill(section.id, sectionPct);
+                applyNavProgressText(section.id, sectionWatched, sectionTotal);
+            });
+
+            const overallPct = total > 0 ? (watchedTotal / total * 100) : 0;
+            applyNavFill('nav-home', overallPct);
+            applyNavProgressText('nav-home', watchedTotal, total);
+        }
+
         function ratingKey(movieId) {
             return 'mcu-rating-' + movieId;
         }
@@ -734,6 +828,10 @@
                 console.warn('Bewertung konnte nicht gespeichert werden:', e);
             }
             updateRatingDisplay(movieId);
+            updateProgress(); // Bewertung > 0 zählt als "gesehen" -> Fortschritt neu berechnen
+
+            const card = document.querySelector('.movie-card[data-movie-id="' + movieId + '"]');
+            if (card) card.classList.toggle('watched', next > 0);
         }
 
         function updateRatingDisplay(movieId) {
@@ -772,8 +870,9 @@
         }
 
         function renderMovieCard(movie) {
+            const watchedClass = getRating(movie.id) > 0 ? ' watched' : '';
             return `
-        <div class="movie-card" onclick="openOverlay(this)">
+        <div class="movie-card${watchedClass}" data-movie-id="${movie.id}" onclick="openOverlay(this)">
             <div class="movie-poster">
                 <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy">
             </div>
@@ -793,11 +892,12 @@
 
         function renderContent() {
             const container = document.querySelector('.container.content-wrapper');
-            const html = MOVIE_DATA.map(section => `
-        <h2 id="${section.id}">${escapeHtml(section.title)}</h2>
+            const sectionsHtml = MOVIE_DATA.map(section => `
+        <h2 id="${section.id}">${escapeHtml(section.title)} <span class="section-count" data-section-id="${section.id}"></span></h2>
         ${section.movies.map(renderMovieCard).join('')}
             `).join('');
-            container.innerHTML = html;
+            container.innerHTML = sectionsHtml;
+            updateProgress();
         }
 
         // Lädt moviedata.json und rendert erst danach Navigation und Filmkarten.
