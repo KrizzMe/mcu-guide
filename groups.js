@@ -347,6 +347,35 @@ async function linkAnzeigen(groupId) {
     feld.select();
 }
 
+// Erzeugt einen neuen Einladungscode. Bestehende Mitglieder bleiben
+// unberührt und können weiter bewerten - die Zugriffsregeln vergleichen
+// beim Aktualisieren nur gegen den im eigenen Eintrag gespeicherten
+// Code, nicht gegen den aktuellen Gruppencode. Ungültig wird also
+// ausschließlich der alte Einladungslink für NEUE Beitritte.
+async function linkErneuern(groupId) {
+    const bestaetigt = window.confirm(
+        'Neuen Einladungslink erzeugen?\n\n' +
+        'Der bisherige Link funktioniert danach nicht mehr. ' +
+        'Wer bereits in der Gruppe ist, bleibt drin und kann weiter bewerten.'
+    );
+    if (!bestaetigt) return;
+
+    try {
+        const neuerCode = zufallsId(24);
+        await setDoc(doc(db, 'groups', groupId, 'private', 'config'),
+                     { inviteCode: neuerCode });
+
+        // Ein eventuell angezeigtes Linkfeld enthält jetzt den alten Wert
+        const feld = document.getElementById('link-' + groupId);
+        if (feld) { feld.value = ''; feld.style.display = 'none'; }
+
+        meldung('Neuer Einladungslink erzeugt. Der alte Link ist ab sofort ungültig.');
+        zeichneFenster();
+    } catch (err) {
+        meldung('Link konnte nicht erneuert werden: ' + (err.code || err.message), true);
+    }
+}
+
 async function sperreUmschalten(groupId, gesperrt) {
     try {
         await updateDoc(doc(db, 'groups', groupId), { locked: gesperrt });
@@ -775,6 +804,7 @@ function abschnittAdmin() {
                     <button class="gruppen-btn schmal grau" data-aktion="sperre" data-gid="${g.id}" data-wert="${g.locked ? 'auf' : 'zu'}">
                         ${g.locked ? 'Entsperren' : 'Sperren'}
                     </button>
+                    <button class="gruppen-btn schmal grau" data-aktion="erneuern" data-gid="${g.id}">Neuer Link</button>
                 </div>
                 <input type="text" class="gruppen-linkfeld" id="link-${g.id}" readonly style="display:none">
             </div>`).join('');
@@ -844,6 +874,7 @@ function fensterKlicks(event) {
     if (aktion === 'kopieren')       linkKopieren(gid);
     if (aktion === 'zeigen')         linkAnzeigen(gid);
     if (aktion === 'sperre')         sperreUmschalten(gid, ziel.dataset.wert === 'zu');
+    if (aktion === 'erneuern')       linkErneuern(gid);
     if (aktion === 'einladung-weg')  einladungVerwerfen();
     if (aktion === 'verlassen')      gruppeVerlassenLokal(gid);
     if (aktion === 'abgleichen') {
