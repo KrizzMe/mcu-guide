@@ -29,16 +29,36 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Beschriftung des Gruppen-Eintrags. Ist eine Gruppe aktiv, steht deren
+// Name darin, sonst schlicht "Gruppen". Lange Namen werden gekürzt,
+// damit die Desktop-Leiste nicht umbricht.
+const GRUPPENNAME_MAXLAENGE = 20;
+
+function groupNavLabel() {
+    const name = typeof window.getAktiveGruppeName === 'function'
+        ? window.getAktiveGruppeName()
+        : null;
+    if (!name) return 'Gruppen';
+    const gekuerzt = name.length > GRUPPENNAME_MAXLAENGE
+        ? name.slice(0, GRUPPENNAME_MAXLAENGE - 1).trimEnd() + '…'
+        : name;
+    return 'Gruppe: ' + gekuerzt;
+}
+
 function renderNav() {
     const nav = document.getElementById('mobileNav');
     const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
     const homeLink = `<a href="#top" class="nav-home" data-fill-key="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home <span class="nav-progress" data-progress-key="nav-home"></span></a>`;
+    // Einstieg in die Gruppenverwaltung (Logik liegt in groups.js),
+    // bewusst direkt neben Home und vor den Sektionen.
+    const groupLink = `<a href="#" class="nav-groups" data-nav-groups title="Gruppen verwalten"><span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}</a>`;
+    // Trennt den Bereich Home/Gruppe von den Sektionen. Auf Desktop ein
+    // senkrechter Strich, auf Mobil eine waagerechte Linie (siehe CSS).
+    const trenner = `<span class="nav-trenner" aria-hidden="true"></span>`;
     const links = MOVIE_DATA.map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
-    // Einstieg in die Gruppenverwaltung (Logik liegt in groups.js)
-    const groupLink = `<a href="#" class="nav-groups" data-nav-groups><span class="nav-groups-icon">👥</span> Gruppen</a>`;
-    nav.innerHTML = closeButton + homeLink + links + groupLink;
+    nav.innerHTML = closeButton + homeLink + groupLink + trenner + links;
 
     // Klick-Handler per addEventListener statt Inline-onclick binden.
     // Robuster als String-Interpolation in onclick-Attributen, da so
@@ -61,6 +81,19 @@ function renderNav() {
         }
     });
 }
+
+// Wird von groups.js aufgerufen, sobald der Name der aktiven Gruppe
+// feststeht oder sich ändert. Nur die Beschriftung neu setzen, statt
+// die ganze Navigation aufzubauen - so gehen die Klick-Handler und die
+// Fortschritts-Füllung nicht verloren.
+function updateGroupNavLabel() {
+    const eintrag = document.querySelector('[data-nav-groups]');
+    if (!eintrag) return;
+    eintrag.innerHTML =
+        `<span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}`;
+}
+
+window.onAktiveGruppeGeaendert = updateGroupNavLabel;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -493,4 +526,3 @@ function buildErrorMessage(err) {
 }
 
 fetchAndRender();
-

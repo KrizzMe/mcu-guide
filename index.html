@@ -177,6 +177,18 @@
             display: none;
         }
 
+        /* Trennt Home/Gruppe von den Sektionen. Auf Desktop ein
+           senkrechter Strich zwischen den Pillen. */
+        .nav-trenner {
+            width: 1px;
+            align-self: stretch;
+            min-height: 20px;
+            background: var(--border-color);
+            margin: 0 4px;
+        }
+
+        .quick-nav a.nav-groups { white-space: nowrap; }
+
         /* Icon grau statt bunt - gleicher Look wie eine nicht bewertete
            (inaktive) Popcorn-Tüte, siehe .popcorn weiter unten */
         .nav-home-icon,
@@ -885,6 +897,20 @@
             .quick-nav.mobile-sidebar {
                 touch-action: pan-y;
             }
+
+            /* Im aufgeklappten Menü stehen die Einträge untereinander -
+               der Trenner wird dort zur waagerechten Linie. */
+            .nav-trenner {
+                width: 100%;
+                height: 1px;
+                min-height: 0;
+                align-self: auto;
+                margin: 6px 0;
+            }
+
+            /* Auf schmalen Geräten darf der Gruppenname umbrechen,
+               statt das Menü in die Breite zu ziehen. */
+            .quick-nav.mobile-sidebar a.nav-groups { white-space: normal; }
 
             /* Zähler "(n/n)" nur im mobilen Drawer sichtbar - ergänzt die
                grüne Füllung um genaue Zahlen für einen besseren Überblick */

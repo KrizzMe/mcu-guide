@@ -85,6 +85,23 @@ function aktiveGruppeId() {
 function aktiveGruppeSetzen(groupId) {
     if (groupId) localStorage.setItem(SPEICHER_AKTIV, groupId);
     else localStorage.removeItem(SPEICHER_AKTIV);
+    navBeschriftungAktualisieren();
+}
+
+// Name der aktiven Gruppe, für die Beschriftung in der Navigation.
+function aktiveGruppeName() {
+    const id = aktiveGruppeId();
+    if (!id) return null;
+    const eintrag = mitgliedschaftenLesen().find(g => g.groupId === id);
+    return eintrag ? eintrag.groupName : null;
+}
+
+// app.js baut die Navigation auf, bevor dieses Modul geladen ist -
+// deshalb die Beschriftung nachträglich melden.
+function navBeschriftungAktualisieren() {
+    if (typeof window.onAktiveGruppeGeaendert === 'function') {
+        window.onAktiveGruppeGeaendert();
+    }
 }
 
 // Sammelt die lokal gespeicherten Bewertungen. Bewusst über die
@@ -1303,6 +1320,11 @@ window.addEventListener('online', () => {
 // Für andere Dateien erreichbar machen
 window.openGroupPanel   = oeffneGruppenFenster;
 window.closeGroupPanel  = schliesseGruppenFenster;
-window.getAktiveGruppe  = aktiveGruppeId;
-window.onRatingChanged  = bewertungHochladen;
-window.getEigeneUid     = () => (aktuellerNutzer ? aktuellerNutzer.uid : null);
+window.getAktiveGruppe      = aktiveGruppeId;
+window.getAktiveGruppeName  = aktiveGruppeName;
+window.onRatingChanged      = bewertungHochladen;
+window.getEigeneUid         = () => (aktuellerNutzer ? aktuellerNutzer.uid : null);
+
+// Beim Start einmal melden - app.js hat die Navigation zu diesem
+// Zeitpunkt bereits ohne Gruppennamen aufgebaut.
+navBeschriftungAktualisieren();
