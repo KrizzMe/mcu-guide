@@ -24,7 +24,7 @@ import {
     sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 import {
-    getFirestore, doc, collection, setDoc, getDoc, getDocs,
+    getFirestore, doc, collection, setDoc, getDoc, getDocs, deleteDoc,
     updateDoc, query, where, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
@@ -389,6 +389,214 @@ async function sperreUmschalten(groupId, gesperrt) {
 }
 
 // ---------------------------------------------------------------------
+// Mitgliederverwaltung (nur Admin, Issue #17)
+// ---------------------------------------------------------------------
+
+let verwalteteMitglieder = {};   // { groupId: [{uid, name, anzahlBewertungen}] }
+let offeneVerwaltung     = null; // groupId, deren Mitgliederliste aufgeklappt ist
+
+async function mitgliederVerwaltenUmschalten(groupId) {
+    if (offeneVerwaltung === groupId) {
+        offeneVerwaltung = null;
+        zeichneFenster();
+        return;
+    }
+    offeneVerwaltung = groupId;
+    zeichneFenster();
+
+    try {
+        const snap = await getDocs(collection(db, 'groups', groupId, 'members'));
+        verwalteteMitglieder[groupId] = snap.docs.map(d => ({
+            uid: d.id,
+            name: d.data().name || 'Unbekannt',
+            anzahlBewertungen: Object.values(d.data().ratings || {})
+                .filter(r => r && r.value > 0).length
+        }));
+        zeichneFenster();
+    } catch (err) {
+        meldung('Mitglieder konnten nicht geladen werden: ' + (err.code || err.message), true);
+    }
+}
+
+async function mitgliedUmbenennen(groupId, uid, alterName) {
+    const neu = window.prompt('Neuer Anzeigename:', alterName);
+    if (neu === null) return;
+    if (!neu.trim() || neu.trim().length > 40) {
+        meldung('Der Name muss zwischen 1 und 40 Zeichen lang sein.', true);
+        return;
+    }
+    try {
+        await updateDoc(doc(db, 'groups', groupId, 'members', uid), { name: neu.trim() });
+        meldung('Name geändert.');
+        await mitgliederNeuLaden(groupId);
+    } catch (err) {
+        meldung('Umbenennen fehlgeschlagen: ' + (err.code || err.message), true);
+    }
+}
+
+async function mitgliedEntfernen(groupId, uid, name) {
+    const sicherheitsfrage = window.confirm(
+        '"' + name + '" wirklich aus der Gruppe entfernen?\n\n' +
+        'Die Bewertungen dieser Person werden dabei gelöscht und lassen sich ' +
+        'nicht wiederherstellen. Für einen Gerätewechsel bitte stattdessen ' +
+        'einen Wiedereinstiegs-Link erzeugen.'
+    );
+    if (!sicherheitsfrage) return;
+
+    try {
+        await deleteDoc(doc(db, 'groups', groupId, 'members', uid));
+        meldung('"' + name + '" wurde entfernt.');
+        await mitgliederNeuLaden(groupId);
+        gruppeAbgleichen().then(zeichneFenster);
+    } catch (err) {
+        meldung('Entfernen fehlgeschlagen: ' + (err.code || err.message), true);
+    }
+}
+
+// Verschiebt den Platz eines Mitglieds in ein Übergabe-Dokument und
+// erzeugt daraus einen persönlichen Wiedereinstiegs-Link. Bewertungen
+// gehen dabei nicht verloren - sie wandern mit und kommen beim Einlösen
+// im neuen Eintrag wieder an.
+async function wiedereinstiegErzeugen(groupId, uid, name) {
+    const bestaetigt = window.confirm(
+        'Wiedereinstiegs-Link für "' + name + '" erzeugen?\n\n' +
+        'Der bisherige Platz wird dabei freigegeben. Auf dem ALTEN Gerät ist ' +
+        'die Gruppe danach nicht mehr verfügbar. Bewertungen bleiben erhalten ' +
+        'und sind nach dem Öffnen des Links auf dem neuen Gerät wieder da.'
+    );
+    if (!bestaetigt) return;
+
+    try {
+        const alterEintrag = await getDoc(doc(db, 'groups', groupId, 'members', uid));
+        if (!alterEintrag.exists()) { meldung('Mitglied nicht gefunden.', true); return; }
+        const daten = alterEintrag.data();
+
+        const claimCode = zufallsId(24);
+        await setDoc(doc(db, 'groups', groupId, 'claims', claimCode), {
+            name: daten.name || name,
+            inviteCode: daten.inviteCode || '',
+            ratings: daten.ratings || {},
+            createdAt: serverTimestamp()
+        });
+
+        // Erst nach erfolgreicher Sicherung den alten Platz freigeben
+        await deleteDoc(doc(db, 'groups', groupId, 'members', uid));
+
+        const link = window.location.origin + window.location.pathname +
+                     '?g=' + encodeURIComponent(groupId) +
+                     '&claim=' + encodeURIComponent(claimCode);
+
+        const feld = document.getElementById('link-' + groupId);
+        if (feld) { feld.value = link; feld.style.display = 'block'; feld.select(); }
+
+        try {
+            await navigator.clipboard.writeText(link);
+            meldung('Wiedereinstiegs-Link für "' + name + '" kopiert. ' +
+                    'Nur an diese Person weitergeben!');
+        } catch (e) {
+            meldung('Wiedereinstiegs-Link erzeugt - siehe Feld unten. ' +
+                    'Nur an diese Person weitergeben!');
+        }
+
+        await mitgliederNeuLaden(groupId);
+    } catch (err) {
+        meldung('Link konnte nicht erzeugt werden: ' + (err.code || err.message), true);
+    }
+}
+
+async function adminUebertragen(groupId, uid, name) {
+    const bestaetigt = window.confirm(
+        'Verwaltung der Gruppe an "' + name + '" übergeben?\n\n' +
+        'Du verlierst damit alle Verwaltungsrechte für diese Gruppe und ' +
+        'kannst sie NICHT selbst zurückholen. Bleibst aber normales Mitglied.'
+    );
+    if (!bestaetigt) return;
+
+    try {
+        await updateDoc(doc(db, 'groups', groupId), { adminUid: uid });
+        offeneVerwaltung = null;
+        meldung('Verwaltung an "' + name + '" übergeben.');
+        await eigeneGruppenLaden();
+        zeichneFenster();
+    } catch (err) {
+        meldung('Übergabe fehlgeschlagen: ' + (err.code || err.message), true);
+    }
+}
+
+async function gruppeLoeschen(groupId, gruppenName) {
+    const bestaetigt = window.confirm(
+        'Gruppe "' + gruppenName + '" endgültig löschen?\n\n' +
+        'Alle Mitglieder und deren geteilte Bewertungen werden gelöscht. ' +
+        'Das lässt sich nicht rückgängig machen.\n\n' +
+        'Die Bewertungen auf den einzelnen Geräten bleiben erhalten.'
+    );
+    if (!bestaetigt) return;
+
+    const nachfrage = window.prompt(
+        'Zur Sicherheit: Bitte den Gruppennamen eingeben, um das Löschen zu bestätigen.');
+    if (nachfrage === null) return;
+    if (nachfrage.trim() !== gruppenName) {
+        meldung('Name stimmt nicht überein - es wurde nichts gelöscht.', true);
+        return;
+    }
+
+    try {
+        // Unterdokumente werden von Firestore NICHT automatisch mitgelöscht,
+        // deshalb hier einzeln entfernen.
+        const mitglieder = await getDocs(collection(db, 'groups', groupId, 'members'));
+        for (const m of mitglieder.docs) {
+            await deleteDoc(doc(db, 'groups', groupId, 'members', m.id));
+        }
+        try {
+            const anspruch = await getDocs(collection(db, 'groups', groupId, 'claims'));
+            for (const c of anspruch.docs) {
+                await deleteDoc(doc(db, 'groups', groupId, 'claims', c.id));
+            }
+        } catch (e) { /* keine offenen Übergaben vorhanden */ }
+
+        await deleteDoc(doc(db, 'groups', groupId, 'private', 'config'));
+        await deleteDoc(doc(db, 'groups', groupId));
+
+        if (aktuellerNutzer) {
+            await setDoc(doc(db, 'users', aktuellerNutzer.uid),
+                         { groupCount: increment(-1) }, { merge: true });
+        }
+
+        // Auch lokal aufräumen
+        const rest = mitgliedschaftenLesen().filter(g => g.groupId !== groupId);
+        mitgliedschaftenSpeichern(rest);
+        if (aktiveGruppeId() === groupId) {
+            aktiveGruppeSetzen(rest.length ? rest[0].groupId : null);
+        }
+        gruppenBewertungen = [];
+        offeneVerwaltung = null;
+        delete verwalteteMitglieder[groupId];
+
+        await eigeneGruppenLaden();
+        meldung('Gruppe "' + gruppenName + '" wurde gelöscht.');
+        zeichneFenster();
+        if (typeof window.onGruppeAktualisiert === 'function') window.onGruppeAktualisiert();
+    } catch (err) {
+        meldung('Löschen fehlgeschlagen: ' + (err.code || err.message), true);
+    }
+}
+
+async function mitgliederNeuLaden(groupId) {
+    try {
+        const snap = await getDocs(collection(db, 'groups', groupId, 'members'));
+        verwalteteMitglieder[groupId] = snap.docs.map(d => ({
+            uid: d.id,
+            name: d.data().name || 'Unbekannt',
+            anzahlBewertungen: Object.values(d.data().ratings || {})
+                .filter(r => r && r.value > 0).length
+        }));
+    } catch (err) {
+        console.warn('Mitglieder konnten nicht neu geladen werden:', err);
+    }
+    zeichneFenster();
+}
+
+// ---------------------------------------------------------------------
 // Beitreten über den Einladungslink
 // ---------------------------------------------------------------------
 
@@ -396,6 +604,8 @@ function einladungAusAdresse() {
     const params = new URLSearchParams(window.location.search);
     const g = params.get('g');
     const c = params.get('c');
+    const claim = params.get('claim');
+    if (g && claim) return { groupId: g, claimCode: claim, istWiedereinstieg: true };
     return (g && c) ? { groupId: g, inviteCode: c } : null;
 }
 
@@ -412,6 +622,19 @@ async function einladungPruefen() {
         } else {
             const g = snap.data();
             einladung = { ...daten, name: g.name, locked: !!g.locked };
+
+            // Beim Wiedereinstieg zusätzlich das Übergabe-Dokument holen -
+            // daraus kommen Name und die bisherigen Bewertungen.
+            if (daten.istWiedereinstieg) {
+                const anspruch = await getDoc(
+                    doc(db, 'groups', daten.groupId, 'claims', daten.claimCode));
+                if (!anspruch.exists()) {
+                    einladung.fehler = 'Dieser Wiedereinstiegs-Link wurde bereits ' +
+                                       'verwendet oder ist nicht mehr gültig.';
+                } else {
+                    einladung.anspruch = anspruch.data();
+                }
+            }
         }
     } catch (err) {
         console.warn('Einladung konnte nicht geprüft werden:', err);
@@ -420,6 +643,50 @@ async function einladungPruefen() {
 
     adresszeileSaeubern();
     oeffneGruppenFenster();
+}
+
+// Löst einen Wiedereinstiegs-Link ein: neuer Eintrag mit den gesicherten
+// Bewertungen, danach wird das Übergabe-Dokument entfernt.
+async function wiedereinstiegEinloesen(anzeigeName) {
+    if (!einladung || !einladung.anspruch) return;
+    if (!anzeigeName.trim()) {
+        meldung('Bitte einen Anzeigenamen eingeben.', true);
+        return;
+    }
+
+    try {
+        const nutzer = await sicherstellenAngemeldet();
+        const a = einladung.anspruch;
+
+        await setDoc(doc(db, 'groups', einladung.groupId, 'members', nutzer.uid), {
+            name: anzeigeName.trim(),
+            inviteCode: a.inviteCode || '',
+            claimCode: einladung.claimCode,
+            ratings: a.ratings || {},
+            joinedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+
+        // Übergabe-Dokument aufräumen, damit der Link nicht erneut
+        // eingelöst werden kann.
+        try {
+            await deleteDoc(doc(db, 'groups', einladung.groupId, 'claims', einladung.claimCode));
+        } catch (e) {
+            console.warn('Übergabe-Dokument konnte nicht entfernt werden:', e);
+        }
+
+        mitgliedschaftMerken(einladung.groupId, einladung.name || 'Gruppe', anzeigeName.trim());
+
+        // Die zurückgeholten Bewertungen in den lokalen Bestand übernehmen
+        const anzahl = Object.keys(a.ratings || {}).length;
+        einladung = null;
+        meldung('Wiedereinstieg erfolgreich. ' + anzahl + ' Bewertung(en) zurückgeholt.');
+        await gruppeAbgleichen();
+        zeichneFenster();
+    } catch (err) {
+        console.error('Wiedereinstieg fehlgeschlagen:', err);
+        meldung('Wiedereinstieg fehlgeschlagen: ' + (err.code || err.message), true);
+    }
 }
 
 async function beitreten(anzeigeName, bewertungenUebernehmen) {
@@ -688,7 +955,7 @@ function abschnittEinladung() {
                 </div>`;
     }
 
-    if (einladung.locked) {
+    if (einladung.locked && !einladung.istWiedereinstieg) {
         return `<div class="gruppen-einladung">
                     <div class="gruppen-untertitel">Einladung zu "${sicher(einladung.name)}"</div>
                     <p class="gruppen-hinweis">
@@ -696,6 +963,27 @@ function abschnittEinladung() {
                         Bitte wende dich an die Person, die dich eingeladen hat.
                     </p>
                     <button class="gruppen-btn grau" data-aktion="einladung-weg">Schließen</button>
+                </div>`;
+    }
+
+    // Wiedereinstieg nach einem Gerätewechsel
+    if (einladung.istWiedereinstieg) {
+        const a = einladung.anspruch || {};
+        const anzahl = Object.values(a.ratings || {}).filter(r => r && r.value > 0).length;
+        return `<div class="gruppen-einladung">
+                    <div class="gruppen-untertitel">Wiedereinstieg in "${sicher(einladung.name)}"</div>
+                    <p class="gruppen-hinweis">
+                        Dein bisheriger Platz wurde für dieses Gerät freigegeben.
+                        ${anzahl > 0
+                            ? '<strong>' + anzahl + ' gespeicherte Bewertung(en)</strong> werden dabei zurückgeholt.'
+                            : 'Es sind keine gespeicherten Bewertungen hinterlegt.'}
+                    </p>
+                    <div class="gruppen-zeile">
+                        <input type="text" id="beitritt-name" placeholder="Dein Anzeigename"
+                               maxlength="40" value="${sicher(a.name || '')}">
+                    </div>
+                    <button class="gruppen-btn" data-aktion="wiedereinstieg">Platz übernehmen</button>
+                    <button class="gruppen-btn grau" data-aktion="einladung-weg">Abbrechen</button>
                 </div>`;
     }
 
@@ -805,8 +1093,12 @@ function abschnittAdmin() {
                         ${g.locked ? 'Entsperren' : 'Sperren'}
                     </button>
                     <button class="gruppen-btn schmal grau" data-aktion="erneuern" data-gid="${g.id}">Neuer Link</button>
+                    <button class="gruppen-btn schmal grau" data-aktion="verwalten" data-gid="${g.id}">
+                        ${offeneVerwaltung === g.id ? 'Mitglieder ausblenden' : 'Mitglieder verwalten'}
+                    </button>
                 </div>
                 <input type="text" class="gruppen-linkfeld" id="link-${g.id}" readonly style="display:none">
+                ${offeneVerwaltung === g.id ? abschnittMitgliederverwaltung(g) : ''}
             </div>`).join('');
 
     const anlegen = `
@@ -823,6 +1115,46 @@ function abschnittAdmin() {
 
     return `<div class="gruppen-block"><div class="gruppen-untertitel">Von mir verwaltet</div>
             ${kopf}${liste}${anlegen}</div>`;
+}
+
+function abschnittMitgliederverwaltung(gruppe) {
+    const mitglieder = verwalteteMitglieder[gruppe.id];
+    if (!mitglieder) {
+        return '<div class="gruppen-verwaltung"><p class="gruppen-hinweis">Lade Mitglieder...</p></div>';
+    }
+
+    const zeilen = mitglieder.map(m => {
+        const istIchSelbst = aktuellerNutzer && m.uid === aktuellerNutzer.uid;
+        return `<div class="mitglied-zeile">
+                    <div class="mitglied-kopf">
+                        <span class="mitglied-name">${sicher(m.name)}</span>
+                        ${istIchSelbst ? '<span class="gruppen-status">du</span>' : ''}
+                        <span class="mitglied-anzahl">${m.anzahlBewertungen} Bewertung(en)</span>
+                    </div>
+                    <div class="gruppen-aktionen">
+                        <button class="gruppen-btn schmal grau" data-aktion="umbenennen"
+                                data-gid="${gruppe.id}" data-uid="${m.uid}" data-name="${sicher(m.name)}">Umbenennen</button>
+                        ${istIchSelbst ? '' : `
+                        <button class="gruppen-btn schmal grau" data-aktion="wiedereinstieg-link"
+                                data-gid="${gruppe.id}" data-uid="${m.uid}" data-name="${sicher(m.name)}">Neues Gerät</button>
+                        <button class="gruppen-btn schmal grau" data-aktion="uebertragen"
+                                data-gid="${gruppe.id}" data-uid="${m.uid}" data-name="${sicher(m.name)}">Verwaltung übergeben</button>
+                        <button class="gruppen-btn schmal grau" data-aktion="entfernen"
+                                data-gid="${gruppe.id}" data-uid="${m.uid}" data-name="${sicher(m.name)}">Entfernen</button>`}
+                    </div>
+                </div>`;
+    }).join('');
+
+    return `<div class="gruppen-verwaltung">
+                <div class="gruppen-untertitel">Mitglieder</div>
+                <p class="gruppen-hinweis">
+                    "Neues Gerät" erzeugt einen persönlichen Link, mit dem jemand seinen
+                    Platz samt Bewertungen auf ein anderes Gerät mitnimmt.
+                </p>
+                ${zeilen || '<p class="gruppen-hinweis">Keine Mitglieder.</p>'}
+                <button class="gruppen-btn schmal gefahr" data-aktion="gruppe-loeschen"
+                        data-gid="${gruppe.id}" data-name="${sicher(gruppe.name)}">Gruppe löschen</button>
+            </div>`;
 }
 
 function zeichneFenster() {
@@ -866,6 +1198,8 @@ function fensterKlicks(event) {
     if (!ziel) return;
     const aktion = ziel.dataset.aktion;
     const gid    = ziel.dataset.gid;
+    const uid    = ziel.dataset.uid;
+    const name   = ziel.dataset.name;
 
     if (aktion === 'schliessen')     schliesseGruppenFenster();
     if (aktion === 'google')         anmeldenMitGoogle();
@@ -877,6 +1211,18 @@ function fensterKlicks(event) {
     if (aktion === 'erneuern')       linkErneuern(gid);
     if (aktion === 'einladung-weg')  einladungVerwerfen();
     if (aktion === 'verlassen')      gruppeVerlassenLokal(gid);
+
+    // Mitgliederverwaltung (Issue #17)
+    if (aktion === 'verwalten')           mitgliederVerwaltenUmschalten(gid);
+    if (aktion === 'umbenennen')          mitgliedUmbenennen(gid, uid, name);
+    if (aktion === 'entfernen')           mitgliedEntfernen(gid, uid, name);
+    if (aktion === 'wiedereinstieg-link') wiedereinstiegErzeugen(gid, uid, name);
+    if (aktion === 'uebertragen')         adminUebertragen(gid, uid, name);
+    if (aktion === 'gruppe-loeschen')     gruppeLoeschen(gid, name);
+    if (aktion === 'wiedereinstieg') {
+        wiedereinstiegEinloesen(document.getElementById('beitritt-name')?.value || '');
+    }
+
     if (aktion === 'abgleichen') {
         meldung('Gleiche ab...');
         gruppeAbgleichen().then(() => {
