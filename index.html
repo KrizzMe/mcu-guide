@@ -618,6 +618,45 @@
             box-sizing: border-box;
         }
 
+        .gruppen-block {
+            margin-bottom: 18px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .gruppen-block:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .gruppen-einladung {
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 18px;
+            background: rgba(137, 0, 0, 0.08);
+        }
+
+        .gruppen-einladung .gruppen-btn { margin-top: 8px; }
+
+        .gruppen-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .gruppen-zeile select {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            padding: 10px 12px;
+            font-size: 0.95rem;
+            min-width: 0;
+        }
+
         .gruppen-anlegen {
             margin-top: 18px;
             padding-top: 16px;
