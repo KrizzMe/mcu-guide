@@ -131,10 +131,33 @@ function adresszeileSaeubern() {
     window.history.replaceState({}, document.title, sauber);
 }
 
+// Firebase stellt eine gespeicherte Anmeldung erst nach kurzer Zeit
+// wieder her. Ohne dieses Warten würde beim Laden der Seite sofort eine
+// NEUE anonyme Kennung erzeugt - die wäre kein Mitglied der Gruppe und
+// bekäme keinen Zugriff.
+let ersteAuthPruefung = null;
+
+function authBereit() {
+    if (!ersteAuthPruefung) {
+        ersteAuthPruefung = new Promise(resolve => {
+            const stop = onAuthStateChanged(auth, nutzer => {
+                stop();
+                resolve(nutzer);
+            });
+        });
+    }
+    return ersteAuthPruefung;
+}
+
 // Stellt sicher, dass überhaupt jemand angemeldet ist. Für den Beitritt
 // genügt eine anonyme Anmeldung - davon merkt der Nutzer nichts.
 async function sicherstellenAngemeldet() {
+    const wiederhergestellt = await authBereit();
     if (aktuellerNutzer) return aktuellerNutzer;
+    if (wiederhergestellt) {
+        aktuellerNutzer = wiederhergestellt;
+        return aktuellerNutzer;
+    }
     const cred = await signInAnonymously(auth);
     aktuellerNutzer = cred.user;
     return aktuellerNutzer;
@@ -206,9 +229,45 @@ async function eigeneGruppenLaden() {
         const q = query(collection(db, 'groups'), where('adminUid', '==', aktuellerNutzer.uid));
         const snap = await getDocs(q);
         meineGruppen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        await mitgliedschaftenErgaenzen();
     } catch (err) {
         console.warn('Gruppen konnten nicht geladen werden:', err);
         meineGruppen = [];
+    }
+}
+
+// Selbst verwaltete Gruppen, die lokal noch nicht als Mitgliedschaft
+// vermerkt sind, werden ergänzt. Das greift in zwei Fällen: bei Gruppen
+// aus einer früheren Fassung der App und - praktischer - wenn sich der
+// Admin auf einem neuen Gerät anmeldet.
+async function mitgliedschaftenErgaenzen() {
+    const bekannt = new Set(mitgliedschaftenLesen().map(g => g.groupId));
+    let ergaenzt = 0;
+
+    for (const gruppe of meineGruppen) {
+        if (bekannt.has(gruppe.id)) continue;
+        try {
+            const eigenerEintrag = await getDoc(
+                doc(db, 'groups', gruppe.id, 'members', aktuellerNutzer.uid));
+            if (!eigenerEintrag.exists()) continue;
+
+            const liste = mitgliedschaftenLesen();
+            liste.push({
+                groupId: gruppe.id,
+                groupName: gruppe.name,
+                memberName: eigenerEintrag.data().name || 'Ich'
+            });
+            mitgliedschaftenSpeichern(liste);
+            if (!aktiveGruppeId()) aktiveGruppeSetzen(gruppe.id);
+            ergaenzt++;
+        } catch (err) {
+            console.warn('Mitgliedschaft für ' + gruppe.id + ' nicht ermittelbar:', err);
+        }
+    }
+
+    if (ergaenzt > 0) {
+        console.info(ergaenzt + ' eigene Gruppe(n) in die Übersicht übernommen.');
+        gruppeAbgleichen().then(zeichneFenster);
     }
 }
 
@@ -384,6 +443,195 @@ function gruppeVerlassenLokal(groupId) {
 }
 
 // ---------------------------------------------------------------------
+// Bewertungen abgleichen
+// ---------------------------------------------------------------------
+
+const SPEICHER_WARTESCHLANGE = 'mcu-sync-warteschlange';
+
+let gruppenBewertungen = [];   // [{uid, name, ratings}] der aktiven Gruppe
+let letzterAbgleich    = null;
+let abgleichLaeuft     = false;
+let abgleichFehler     = null;
+
+function warteschlangeLesen() {
+    try {
+        return JSON.parse(localStorage.getItem(SPEICHER_WARTESCHLANGE) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function warteschlangeSpeichern(daten) {
+    try {
+        localStorage.setItem(SPEICHER_WARTESCHLANGE, JSON.stringify(daten));
+    } catch (e) {
+        console.warn('Warteschlange konnte nicht gespeichert werden:', e);
+    }
+}
+
+// Änderungen, die ohne Verbindung entstanden sind, werden gesammelt und
+// beim nächsten erfolgreichen Zugriff nachgereicht.
+function fuerSpaeterMerken(groupId, movieId, wert, zeitstempel) {
+    const alle = warteschlangeLesen();
+    if (!alle[groupId]) alle[groupId] = {};
+    alle[groupId][movieId] = { value: wert, updatedAt: zeitstempel };
+    warteschlangeSpeichern(alle);
+}
+
+async function warteschlangeAbarbeiten() {
+    const alle = warteschlangeLesen();
+    const gruppenIds = Object.keys(alle);
+    if (gruppenIds.length === 0) return;
+
+    for (const groupId of gruppenIds) {
+        const eintraege = alle[groupId];
+        try {
+            const nutzer = await sicherstellenAngemeldet();
+            const aenderungen = { updatedAt: serverTimestamp() };
+            Object.entries(eintraege).forEach(([movieId, wert]) => {
+                aenderungen['ratings.' + movieId] = wert;
+            });
+            await updateDoc(doc(db, 'groups', groupId, 'members', nutzer.uid), aenderungen);
+            delete alle[groupId];
+        } catch (err) {
+            console.warn('Nachreichen für Gruppe ' + groupId + ' fehlgeschlagen:', err);
+        }
+    }
+    warteschlangeSpeichern(alle);
+}
+
+// Wird von app.js aufgerufen, sobald eine Bewertung geändert wurde.
+async function bewertungHochladen(movieId, wert, zeitstempel) {
+    const groupId = aktiveGruppeId();
+    if (!groupId) return;   // ohne aktive Gruppe bleibt alles rein lokal
+
+    try {
+        const nutzer = await sicherstellenAngemeldet();
+        await updateDoc(doc(db, 'groups', groupId, 'members', nutzer.uid), {
+            ['ratings.' + movieId]: { value: wert, updatedAt: zeitstempel },
+            updatedAt: serverTimestamp()
+        });
+    } catch (err) {
+        console.warn('Bewertung konnte nicht geteilt werden, wird nachgereicht:', err);
+        fuerSpaeterMerken(groupId, movieId, wert, zeitstempel);
+    }
+}
+
+// Gleicht den eigenen Stand mit der Gruppe ab und lädt die Bewertungen
+// der anderen. Bei Abweichungen gewinnt die jüngere Änderung.
+async function gruppeAbgleichen() {
+    const groupId = aktiveGruppeId();
+    if (!groupId) { gruppenBewertungen = []; return; }
+
+    abgleichLaeuft = true;
+    abgleichFehler = null;
+
+    try {
+        const nutzer = await sicherstellenAngemeldet();
+        await warteschlangeAbarbeiten();
+
+        const snap = await getDocs(collection(db, 'groups', groupId, 'members'));
+        gruppenBewertungen = snap.docs.map(d => ({
+            uid: d.id,
+            name: d.data().name || 'Unbekannt',
+            ratings: d.data().ratings || {}
+        }));
+
+        const eigene = gruppenBewertungen.find(m => m.uid === nutzer.uid);
+        if (eigene) {
+            await eigenenStandAbgleichen(groupId, nutzer.uid, eigene.ratings);
+        } else {
+            abgleichFehler = 'Du bist auf diesem Gerät kein Mitglied dieser Gruppe. ' +
+                             'Bitte den Einladungslink erneut öffnen.';
+        }
+
+        letzterAbgleich = new Date();
+        window.GRUPPEN_BEWERTUNGEN = gruppenBewertungen;
+        if (typeof window.onGruppeAktualisiert === 'function') {
+            window.onGruppeAktualisiert(gruppenBewertungen);
+        }
+    } catch (err) {
+        console.warn('Abgleich mit der Gruppe fehlgeschlagen:', err);
+        abgleichFehler = err.code === 'permission-denied'
+            ? 'Kein Zugriff auf diese Gruppe (kein Mitglied auf diesem Gerät).'
+            : (err.code || err.message);
+    } finally {
+        abgleichLaeuft = false;
+    }
+}
+
+// Vergleicht Film für Film den lokalen mit dem gespeicherten Stand.
+async function eigenenStandAbgleichen(groupId, uid, entfernteBewertungen) {
+    const lokale = lokaleBewertungenMitZeit();
+    const nachOben = {};
+    let vonUntenUebernommen = 0;
+
+    // Alle Filme betrachten, die auf einer der beiden Seiten vorkommen
+    const alleIds = new Set([...Object.keys(lokale), ...Object.keys(entfernteBewertungen)]);
+
+    alleIds.forEach(movieId => {
+        const l = lokale[movieId];
+        const e = entfernteBewertungen[movieId];
+
+        if (l && !e) {
+            nachOben['ratings.' + movieId] = l;
+        } else if (!l && e) {
+            if (typeof window.applyRemoteRating === 'function') {
+                window.applyRemoteRating(movieId, e.value, e.updatedAt || 0);
+                vonUntenUebernommen++;
+            }
+        } else if (l && e) {
+            if ((l.updatedAt || 0) > (e.updatedAt || 0)) {
+                nachOben['ratings.' + movieId] = l;
+            } else if ((e.updatedAt || 0) > (l.updatedAt || 0) && e.value !== l.value) {
+                if (typeof window.applyRemoteRating === 'function') {
+                    window.applyRemoteRating(movieId, e.value, e.updatedAt);
+                    vonUntenUebernommen++;
+                }
+            }
+        }
+    });
+
+    if (Object.keys(nachOben).length > 0) {
+        try {
+            nachOben.updatedAt = serverTimestamp();
+            await updateDoc(doc(db, 'groups', groupId, 'members', uid), nachOben);
+        } catch (err) {
+            console.warn('Eigener Stand konnte nicht hochgeladen werden:', err);
+        }
+    }
+
+    if (vonUntenUebernommen > 0) {
+        console.info(vonUntenUebernommen + ' Bewertung(en) von einem anderen Gerät übernommen.');
+    }
+}
+
+// Wie lokaleBewertungen(), aber mit den Zeitstempeln aus app.js - und
+// bewusst INKLUSIVE zurückgenommener Bewertungen (Wert 0 mit Zeitstempel).
+// Ohne die wüsste der Abgleich nicht, dass eine Bewertung absichtlich
+// entfernt wurde, und würde den alten Stand aus der Gruppe zurückholen.
+function lokaleBewertungenMitZeit() {
+    let zeiten = {};
+    try {
+        zeiten = JSON.parse(localStorage.getItem('mcu-rating-times') || '{}');
+    } catch (e) { /* ohne Zeitstempel weiterarbeiten */ }
+
+    const ergebnis = {};
+
+    Object.entries(lokaleBewertungen()).forEach(([movieId, eintrag]) => {
+        ergebnis[movieId] = { value: eintrag.value, updatedAt: zeiten[movieId] || 0 };
+    });
+
+    Object.keys(zeiten).forEach(movieId => {
+        if (ergebnis[movieId]) return;
+        const wert = parseInt(localStorage.getItem(RATING_PRAEFIX + movieId) || '0', 10);
+        ergebnis[movieId] = { value: wert, updatedAt: zeiten[movieId] };
+    });
+
+    return ergebnis;
+}
+
+// ---------------------------------------------------------------------
 // Oberfläche
 // ---------------------------------------------------------------------
 
@@ -453,6 +701,23 @@ function abschnittMeineGruppen() {
 
     const aktuelle = liste.find(g => g.groupId === aktiv) || liste[0];
 
+    const status = gruppenBewertungen.length > 0
+        ? `<div class="gruppen-status-box">
+               <div><strong>${gruppenBewertungen.length}</strong> Mitglied(er) in dieser Gruppe:</div>
+               <ul class="gruppen-mitglieder">
+                   ${gruppenBewertungen.map(m => {
+                       const anzahl = Object.values(m.ratings)
+                           .filter(r => r && r.value > 0).length;
+                       return `<li>${sicher(m.name)} - ${anzahl} Bewertung(en)</li>`;
+                   }).join('')}
+               </ul>
+               ${letzterAbgleich ? `<div class="gruppen-zeitstempel">Zuletzt abgeglichen: ${letzterAbgleich.toLocaleTimeString('de-DE')}</div>` : ''}
+           </div>`
+        : `<div class="gruppen-status-box">
+               <div>${abgleichLaeuft ? 'Wird abgeglichen...' : 'Noch keine Daten geladen.'}</div>
+               ${abgleichFehler ? `<div class="gruppen-zeitstempel">Letzter Fehler: ${sicher(abgleichFehler)}</div>` : ''}
+           </div>`;
+
     return `<div class="gruppen-block">
                 <div class="gruppen-untertitel">Meine Gruppen</div>
                 <p class="gruppen-hinweis">
@@ -461,9 +726,13 @@ function abschnittMeineGruppen() {
                 <div class="gruppen-zeile">
                     <select id="gruppen-auswahl">${optionen}</select>
                 </div>
-                <button class="gruppen-btn schmal grau" data-aktion="verlassen" data-gid="${sicher(aktuelle.groupId)}">
-                    Ausgewählte Gruppe verlassen
-                </button>
+                ${status}
+                <div class="gruppen-aktionen">
+                    <button class="gruppen-btn schmal" data-aktion="abgleichen">Jetzt abgleichen</button>
+                    <button class="gruppen-btn schmal grau" data-aktion="verlassen" data-gid="${sicher(aktuelle.groupId)}">
+                        Gruppe verlassen
+                    </button>
+                </div>
             </div>`;
 }
 
@@ -577,6 +846,13 @@ function fensterKlicks(event) {
     if (aktion === 'sperre')         sperreUmschalten(gid, ziel.dataset.wert === 'zu');
     if (aktion === 'einladung-weg')  einladungVerwerfen();
     if (aktion === 'verlassen')      gruppeVerlassenLokal(gid);
+    if (aktion === 'abgleichen') {
+        meldung('Gleiche ab...');
+        gruppeAbgleichen().then(() => {
+            meldung('Abgleich abgeschlossen.');
+            zeichneFenster();
+        });
+    }
     if (aktion === 'beitreten') {
         beitreten(
             document.getElementById('beitritt-name')?.value || '',
@@ -595,8 +871,14 @@ function fensterKlicks(event) {
 function fensterAenderungen(event) {
     if (event.target.id === 'gruppen-auswahl') {
         aktiveGruppeSetzen(event.target.value);
-        meldung('Aktive Gruppe gewechselt.');
+        gruppenBewertungen = [];
+        letzterAbgleich = null;
+        meldung('Aktive Gruppe gewechselt, gleiche ab...');
         zeichneFenster();
+        gruppeAbgleichen().then(() => {
+            meldung('Aktive Gruppe gewechselt.');
+            zeichneFenster();
+        });
     }
 }
 
@@ -629,7 +911,20 @@ onAuthStateChanged(auth, async nutzer => {
 anmeldungAusLinkAbschliessen();
 einladungPruefen();
 
+// Beim Start einmal mit der aktiven Gruppe abgleichen. Läuft im
+// Hintergrund - schlägt es fehl, funktioniert die App trotzdem
+// vollständig weiter, nur eben ohne die Bewertungen der anderen.
+if (aktiveGruppeId()) {
+    gruppeAbgleichen().then(zeichneFenster);
+}
+
+// Kommt die Verbindung zurück, werden gemerkte Änderungen nachgereicht.
+window.addEventListener('online', () => {
+    warteschlangeAbarbeiten().then(() => gruppeAbgleichen()).then(zeichneFenster);
+});
+
 // Für andere Dateien erreichbar machen
 window.openGroupPanel   = oeffneGruppenFenster;
 window.closeGroupPanel  = schliesseGruppenFenster;
 window.getAktiveGruppe  = aktiveGruppeId;
+window.onRatingChanged  = bewertungHochladen;

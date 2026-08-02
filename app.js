@@ -145,6 +145,56 @@ function ratingKey(movieId) {
     return 'mcu-rating-' + movieId;
 }
 
+// Zeitstempel je Bewertung, gesammelt in EINEM Eintrag. Nötig, um beim
+// Abgleich mit einer Gruppe entscheiden zu können, welcher Stand neuer
+// ist (z. B. Handy gegen PC). Bewusst getrennt von den Bewertungen
+// selbst, damit der bisherige Speicheraufbau unverändert bleibt.
+const RATING_TIMES_KEY = 'mcu-rating-times';
+
+function getRatingTimes() {
+    try {
+        return JSON.parse(localStorage.getItem(RATING_TIMES_KEY) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function getRatingTime(movieId) {
+    return getRatingTimes()[movieId] || 0;
+}
+
+function setRatingTime(movieId, zeitstempel) {
+    try {
+        const alle = getRatingTimes();
+        alle[movieId] = zeitstempel;
+        localStorage.setItem(RATING_TIMES_KEY, JSON.stringify(alle));
+    } catch (e) {
+        console.warn('Zeitstempel konnte nicht gespeichert werden:', e);
+    }
+}
+
+// Gemeinsamer Kern für eigene Eingaben und für Stände, die aus einer
+// Gruppe übernommen werden. Kümmert sich um Speichern und Anzeige.
+function speichereBewertung(movieId, wert, zeitstempel) {
+    try {
+        localStorage.setItem(ratingKey(movieId), String(wert));
+    } catch (e) {
+        console.warn('Bewertung konnte nicht gespeichert werden:', e);
+    }
+    setRatingTime(movieId, zeitstempel);
+    updateRatingDisplay(movieId);
+    updateProgress(); // Bewertung > 0 zählt als "gesehen" -> Fortschritt neu berechnen
+
+    const card = document.querySelector('.movie-card[data-movie-id="' + movieId + '"]');
+    if (card) card.classList.toggle('watched', wert > 0);
+}
+
+// Übernimmt einen Stand aus der Gruppe, OHNE ihn erneut hochzuladen -
+// sonst würden sich zwei Geräte gegenseitig endlos aktualisieren.
+function applyRemoteRating(movieId, wert, zeitstempel) {
+    speichereBewertung(movieId, wert, zeitstempel);
+}
+
 function getRating(movieId) {
     try {
         return parseInt(localStorage.getItem(ratingKey(movieId)) || '0', 10);
@@ -157,16 +207,16 @@ function setRating(movieId, value, event) {
     event.stopPropagation(); // verhindert, dass die Karte das Poster-Overlay öffnet
     const current = getRating(movieId);
     const next = (current === value) ? 0 : value; // erneutes Antippen setzt zurück
-    try {
-        localStorage.setItem(ratingKey(movieId), String(next));
-    } catch (e) {
-        console.warn('Bewertung konnte nicht gespeichert werden:', e);
-    }
-    updateRatingDisplay(movieId);
-    updateProgress(); // Bewertung > 0 zählt als "gesehen" -> Fortschritt neu berechnen
+    const jetzt = Date.now();
 
-    const card = document.querySelector('.movie-card[data-movie-id="' + movieId + '"]');
-    if (card) card.classList.toggle('watched', next > 0);
+    speichereBewertung(movieId, next, jetzt);
+
+    // Falls eine Gruppe aktiv ist, wird die Änderung geteilt. groups.js
+    // wird als Modul geladen und ist eventuell noch nicht bereit -
+    // deshalb erst hier nachsehen, ob die Funktion existiert.
+    if (typeof window.onRatingChanged === 'function') {
+        window.onRatingChanged(movieId, next, jetzt);
+    }
 }
 
 function updateRatingDisplay(movieId) {
