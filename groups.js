@@ -928,3 +928,4 @@ window.openGroupPanel   = oeffneGruppenFenster;
 window.closeGroupPanel  = schliesseGruppenFenster;
 window.getAktiveGruppe  = aktiveGruppeId;
 window.onRatingChanged  = bewertungHochladen;
+window.getEigeneUid     = () => (aktuellerNutzer ? aktuellerNutzer.uid : null);

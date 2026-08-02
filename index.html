@@ -697,6 +697,32 @@
         .gruppen-meldung.erfolg { background: rgba(76,175,80,0.15); color: #4caf50; }
         .gruppen-meldung.fehler { background: rgba(211,47,47,0.15); color: #ef5350; }
 
+        /* Bewertungen der Gruppe unter der Meta-Zeile (Issue #16) */
+        .movie-group-slot:empty { display: none; }
+
+        .movie-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 12px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .movie-group.verdeckt { font-style: italic; opacity: 0.8; }
+
+        .gruppe-schnitt {
+            color: var(--text-color);
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .gruppe-person { white-space: nowrap; }
+        .gruppe-person strong { color: var(--text-color); }
+
         @media screen and (max-width: 768px) {
             body {
                 padding: 10px;

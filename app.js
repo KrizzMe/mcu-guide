@@ -185,6 +185,10 @@ function speichereBewertung(movieId, wert, zeitstempel) {
     updateRatingDisplay(movieId);
     updateProgress(); // Bewertung > 0 zählt als "gesehen" -> Fortschritt neu berechnen
 
+    // Die Bewertungen der Gruppe werden erst nach eigener Abgabe
+    // sichtbar - deshalb hier neu zeichnen.
+    if (typeof updateGroupDisplay === 'function') updateGroupDisplay(movieId);
+
     const card = document.querySelector('.movie-card[data-movie-id="' + movieId + '"]');
     if (card) card.classList.toggle('watched', wert > 0);
 }
@@ -254,6 +258,64 @@ function renderMovieMeta(movie) {
     return `<div class="movie-meta-left">${imdbLink}${tmdbLink}</div>`;
 }
 
+// --- Bewertungen der Gruppe auf den Filmkarten (Issue #16, Schritt 6) ---
+// Die eigene Bewertung ist immer sichtbar. Die der anderen erscheinen
+// bewusst erst, nachdem man selbst bewertet hat - so lässt man sich beim
+// eigenen Urteil nicht beeinflussen.
+
+function renderGroupSlot(movieId) {
+    return `<div class="movie-group-slot" data-group-movie-id="${movieId}"></div>`;
+}
+
+function buildGroupInfo(movieId) {
+    const mitglieder = window.GRUPPEN_BEWERTUNGEN || [];
+    if (mitglieder.length === 0) return '';   // keine Gruppe aktiv
+
+    const eigeneKennung = typeof window.getEigeneUid === 'function' ? window.getEigeneUid() : null;
+    const andere = mitglieder.filter(m => m.uid !== eigeneKennung);
+
+    const fremdeBewertungen = andere
+        .map(m => ({ name: m.name, wert: (m.ratings && m.ratings[movieId] && m.ratings[movieId].value) || 0 }))
+        .filter(b => b.wert > 0);
+
+    if (fremdeBewertungen.length === 0) return '';   // niemand sonst hat bewertet
+
+    if (getRating(movieId) === 0) {
+        return `<div class="movie-group verdeckt">
+                    👥 ${fremdeBewertungen.length} Bewertung(en) aus der Gruppe -
+                    sichtbar, sobald du selbst bewertet hast
+                </div>`;
+    }
+
+    const alleWerte = fremdeBewertungen.map(b => b.wert).concat(getRating(movieId));
+    const schnitt = (alleWerte.reduce((a, b) => a + b, 0) / alleWerte.length)
+        .toFixed(1).replace('.', ',');
+
+    const namen = fremdeBewertungen
+        .map(b => `<span class="gruppe-person">${escapeHtml(b.name)} <strong>${b.wert}</strong></span>`)
+        .join('');
+
+    return `<div class="movie-group">
+                <span class="gruppe-schnitt">👥 Ø ${schnitt}</span>${namen}
+            </div>`;
+}
+
+// Füllt alle Platzhalter neu. Wird aufgerufen, wenn Gruppendaten
+// eintreffen und wenn sich die eigene Bewertung ändert.
+function updateGroupDisplay(movieId) {
+    const auswahl = movieId
+        ? [document.querySelector('[data-group-movie-id="' + movieId + '"]')]
+        : Array.from(document.querySelectorAll('[data-group-movie-id]'));
+
+    auswahl.forEach(slot => {
+        if (!slot) return;
+        slot.innerHTML = buildGroupInfo(slot.dataset.groupMovieId);
+    });
+}
+
+// groups.js meldet über diesen Weg, dass neue Gruppendaten vorliegen.
+window.onGruppeAktualisiert = () => updateGroupDisplay();
+
 function renderMovieCard(movie) {
     const watchedClass = getRating(movie.id) > 0 ? ' watched' : '';
     return `
@@ -271,6 +333,7 @@ function renderMovieCard(movie) {
             ${renderMovieMeta(movie)}
             ${renderRatingWidget(movie.id)}
         </div>
+        ${renderGroupSlot(movie.id)}
     </div>
 </div>`;
 }
@@ -283,6 +346,7 @@ ${section.movies.map(renderMovieCard).join('')}
     `).join('');
     container.innerHTML = sectionsHtml;
     updateProgress();
+    updateGroupDisplay();   // falls Gruppendaten bereits vorliegen
 }
 
 // Lädt moviedata.json und rendert erst danach Navigation und Filmkarten.
