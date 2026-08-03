@@ -8,7 +8,7 @@
   "icons": [
     {
       "src": "m.png",
-      "sizes": "444x444",
+      "sizes": "400x400",
       "type": "image/png",
       "purpose": "any"
     }
