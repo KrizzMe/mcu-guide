@@ -51,8 +51,13 @@ let ladeVorgang     = false;
 let einladung       = null;   // { groupId, inviteCode, name, locked } bei offener Einladung
 
 // Welche Ansicht das Fenster gerade zeigt:
-// 'gruppen' | 'konto' | 'loeschen-hinweis' | 'loeschen-admin' | 'loeschen-final'
+// 'gruppen' | 'konto' | 'datenschutz'
+// | 'loeschen-hinweis' | 'loeschen-admin' | 'loeschen-final'
 let ansicht = 'gruppen';
+
+// Ansicht, aus der die Datenschutzhinweise geöffnet wurden - damit
+// "Zurück" wieder dort landet (Login, Profil oder Fußzeile).
+let vorherigeAnsicht = 'konto';
 
 const SPEICHER_EMAIL    = 'mcu-anmelde-email';
 const SPEICHER_GRUPPEN  = 'mcu-gruppen';
@@ -1340,7 +1345,11 @@ function abschnittLogin() {
         <div class="gruppen-zeile">
             <input type="email" id="anmelde-email" placeholder="deine@email.de" autocomplete="email">
             <button class="gruppen-btn schmal" data-aktion="maillink">Link senden</button>
-        </div>`;
+        </div>
+        <p class="gruppen-hinweis ds-verweis">
+            Bevor du dich anmeldest:
+            <button class="gruppen-link-btn" data-aktion="datenschutz">Welche Daten werden gespeichert?</button>
+        </p>`;
 }
 
 function abschnittProfil() {
@@ -1429,6 +1438,130 @@ function abschnittLoeschenFinal() {
         <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Abbrechen</button>`;
 }
 
+// --- Datenschutzhinweise (Issue #22) ---
+
+function abschnittDatenschutz() {
+    return `
+        <p class="gruppen-hinweis">
+            Diese Seite ist ein privates, nicht-kommerzielles Projekt. Die folgenden
+            Hinweise sollen offenlegen, was technisch passiert - nicht nur formale
+            Pflichten erfüllen.
+        </p>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wer ist verantwortlich?</div>
+            <p>Betrieben wird die Seite privat von KrizzMe.</p>
+            <p>Kontakt: <a href="mailto:krizzme.projects@gmail.com">krizzme.projects@gmail.com</a></p>
+            <p>Der Quellcode ist öffentlich einsehbar unter
+               <a href="https://github.com/KrizzMe/mcu-guide" target="_blank" rel="noopener noreferrer">github.com/KrizzMe/mcu-guide</a>.
+               Dort lässt sich nachvollziehen, was die App tatsächlich tut.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Ohne Anmeldung: nichts verlässt dein Gerät</div>
+            <p>Wer nur Filme bewerten möchte, braucht keinen Account. Bewertungen
+               werden dann ausschließlich lokal auf deinem Gerät gespeichert und
+               nirgendwohin übertragen.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Welche Daten fallen bei der Anmeldung an?</div>
+            <ul>
+                <li>Deine E-Mail-Adresse</li>
+                <li>Eine technische Kennung deines Kontos</li>
+            </ul>
+            <p>Diese Daten stammen von Google beziehungsweise aus dem Versand des
+               Anmeldelinks.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Welche Daten werden in einer Gruppe geteilt?</div>
+            <ul>
+                <li>Dein selbst gewählter Anzeigename</li>
+                <li>Deine Filmbewertungen</li>
+                <li>Der Zeitpunkt der letzten Änderung</li>
+            </ul>
+            <p>Sichtbar sind diese Angaben ausschließlich für die anderen Mitglieder
+               derselben Gruppe.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wofür wird die Anmeldung überhaupt gebraucht?</div>
+            <p>Ausschließlich für die Gruppenfunktion. Sie sorgt dafür, dass du nach
+               einem Gerätewechsel wieder Zugriff auf deine Gruppen bekommst - ohne
+               eine dauerhafte Kennung wäre das technisch nicht möglich.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was wird auf deinem Gerät gespeichert?</div>
+            <ul>
+                <li>Bewertungen, Gruppenmitgliedschaften und die zuletzt gewählte
+                    Gruppe im lokalen Speicher deines Geräts</li>
+                <li>Technische Angaben zum Angemeldet-Bleiben (durch Firebase)</li>
+            </ul>
+            <p>Das gilt gleichermaßen, ob du die Seite im Browser öffnest oder über
+               das Symbol auf dem Startbildschirm - technisch ist es derselbe
+               Speicher. Es werden keine eigenen Cookies gesetzt und es findet keine
+               Wiedererkennung über Websites hinweg statt. Alles Gespeicherte ist für
+               die Funktionen erforderlich, die du selbst nutzt - deshalb gibt es hier
+               auch kein Einwilligungsbanner. Beim Anmelden über Google öffnet sich ein
+               Fenster von Google; was dort gespeichert wird, unterliegt Googles
+               eigener Datenschutzerklärung.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wo liegen die Daten?</div>
+            <ul>
+                <li>Firebase (Google), Datenbankstandort Frankfurt am Main</li>
+                <li>Hosting über GitHub Pages, dort fallen serverseitig Zugriffsdaten an</li>
+                <li>Die technischen Bausteine der Anmeldung werden bei jedem
+                    Seitenaufruf von einem Google-Server geladen; dabei wird deine
+                    IP-Adresse an Google übertragen</li>
+            </ul>
+            <p>Beide Anbieter verarbeiten die Daten ausschließlich als technische
+               Dienstleister im Auftrag.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was ausdrücklich nicht passiert</div>
+            <ul>
+                <li>Keine Weitergabe an Dritte zu deren eigenen Zwecken</li>
+                <li>Kein Verkauf von Daten</li>
+                <li>Keine Werbung, keine Profilbildung</li>
+                <li>Keine Analyse- oder Trackingdienste - Google Analytics wurde im
+                    Firebase-Projekt bewusst deaktiviert</li>
+            </ul>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wie wirst du deine Daten wieder los?</div>
+            <p>Jederzeit selbst über <strong>Mein Profil → Account löschen</strong>.
+               Dabei werden Konto, Gruppenmitgliedschaften und geteilte Bewertungen
+               entfernt; die lokalen Bewertungen auf Wunsch ebenfalls. Alternativ
+               lassen sich die lokalen Daten über die Browser-Einstellungen löschen.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Links zu externen Seiten</div>
+            <p>Auf den Filmkarten findest du Verweise zu IMDb und TMDb. Beim Anklicken
+               verlässt du diese Seite; ab dann gelten die Datenschutzbestimmungen des
+               jeweiligen Anbieters.</p>
+            <p>Für die Inhalte externer Seiten übernehme ich keine Haftung. Zum
+               Zeitpunkt der Verlinkung waren keine rechtswidrigen Inhalte erkennbar.
+               Sollte mir eine Rechtsverletzung bekannt werden, entferne ich den
+               entsprechenden Verweis umgehend.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Deine Rechte</div>
+            <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und Widerspruch
+               sowie das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu
+               beschweren.</p>
+        </div>
+
+        <button class="gruppen-btn grau" data-aktion="datenschutz-zurueck">Zurück</button>`;
+}
+
 function zeichneFenster() {
     const inhalt = document.getElementById('gruppen-inhalt');
     const titelEl = document.getElementById('gruppen-titel');
@@ -1436,6 +1569,12 @@ function zeichneFenster() {
 
     if (ladeVorgang) {
         inhalt.innerHTML = '<p class="gruppen-hinweis">Einen Moment...</p>';
+        return;
+    }
+
+    if (ansicht === 'datenschutz') {
+        if (titelEl) titelEl.textContent = 'Datenschutzhinweise';
+        inhalt.innerHTML = abschnittDatenschutz();
         return;
     }
 
@@ -1540,6 +1679,18 @@ function fensterKlicks(event) {
         accountLoeschen(document.getElementById('loeschen-bewertungen')?.checked !== false);
     }
 
+    // Datenschutzhinweise (Issue #22)
+    if (aktion === 'datenschutz') {
+        vorherigeAnsicht = ansicht;
+        ansicht = 'datenschutz';
+        meldungLeeren();
+        zeichneFenster();
+    }
+    if (aktion === 'datenschutz-zurueck') {
+        ansicht = vorherigeAnsicht || 'konto';
+        zeichneFenster();
+    }
+
     if (aktion === 'abgleichen') {
         meldung('Gleiche ab...');
         gruppeAbgleichen().then(() => {
@@ -1621,6 +1772,10 @@ window.addEventListener('online', () => {
 // Für andere Dateien erreichbar machen
 window.openGroupPanel       = oeffneGruppenFenster;
 window.openKontoPanel       = oeffneKontoFenster;
+window.openDatenschutz      = () => {
+    vorherigeAnsicht = 'konto';
+    fensterOeffnen('datenschutz');
+};
 window.closeGroupPanel      = schliesseGruppenFenster;
 window.getKontoLabel        = () => (istEchtAngemeldet() ? 'Mein Profil' : 'Login');
 window.getAktiveGruppe      = aktiveGruppeId;
