@@ -51,7 +51,7 @@ let ladeVorgang     = false;
 let einladung       = null;   // { groupId, inviteCode, name, locked } bei offener Einladung
 
 // Welche Ansicht das Fenster gerade zeigt:
-// 'gruppen' | 'konto' | 'datenschutz'
+// 'gruppen' | 'konto' | 'datenschutz' | 'infos'
 // | 'loeschen-hinweis' | 'loeschen-admin' | 'loeschen-final'
 let ansicht = 'gruppen';
 
@@ -1438,6 +1438,74 @@ function abschnittLoeschenFinal() {
         <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Abbrechen</button>`;
 }
 
+// --- Infos zum Fan Guide (Issue #24) ---
+// Enthält die von TMDB vorgeschriebene Attribution. Die Vorgabe verlangt
+// einen Bereich vom Typ "About"/"Credits", den wörtlichen englischen
+// Hinweis sowie das unveränderte Logo, weniger prominent als das eigene.
+
+function abschnittInfos() {
+    return `
+        <div class="ds-block">
+            <div class="ds-titel">Was ist das hier?</div>
+            <p>Eine private Übersicht der Filme des Marvel Cinematic Universe und
+               einiger wichtiger Zusatzfilme - sortiert in einer selbst
+               zusammengestellten Reihenfolge, die sich für gemeinsame Filmabende
+               bewährt hat.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was kannst du damit machen?</div>
+            <ul>
+                <li>Filme mit Popcorn-Tüten bewerten (0 bis 5)</li>
+                <li>Den eigenen Fortschritt verfolgen - bewertete Filme gelten als gesehen</li>
+                <li>Optional eine Gruppe anlegen und sehen, wie andere dieselben Filme
+                    bewertet haben</li>
+            </ul>
+            <p>Zum Bewerten ist keine Anmeldung nötig. Die Bewertungen bleiben dann
+               ausschließlich auf deinem Gerät.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wer steckt dahinter?</div>
+            <p>Ein privates, nicht-kommerzielles Projekt von KrizzMe. Der Quellcode ist
+               öffentlich einsehbar unter
+               <a href="https://github.com/KrizzMe/mcu-guide" target="_blank" rel="noopener noreferrer">github.com/KrizzMe/mcu-guide</a>.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Filmdaten und Poster</div>
+            <p>Filmdaten und Poster stammen von The Movie Database (TMDB). Die Rechte an
+               den Postern liegen bei den jeweiligen Filmstudios. Diese Seite steht in
+               keiner Verbindung zu Marvel, Disney oder anderen Rechteinhabern.</p>
+
+            <div class="tmdb-attribution">
+                <div class="tmdb-untertitel">Hinweis zur Datenquelle</div>
+                <img src="tmdb-logo.svg" alt="The Movie Database (TMDB)" class="tmdb-logo"
+                     onerror="this.style.display='none'">
+                <p class="tmdb-notice">
+                    This product uses the TMDB API but is not endorsed or certified by TMDB.
+                </p>
+                <p class="tmdb-erklaerung">
+                    (Dieser englische Hinweis ist von TMDB vorgegeben und muss so
+                    ausgewiesen sein.)
+                </p>
+                <p class="tmdb-erklaerung">
+                    <strong>Übersetzung:</strong> Diese Anwendung nutzt die
+                    TMDB-Schnittstelle, wird von TMDB aber weder unterstützt noch
+                    zertifiziert.
+                </p>
+            </div>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Datenschutz</div>
+            <p>Welche Daten gespeichert werden und wofür, steht in den
+               <button class="gruppen-link-btn" data-aktion="datenschutz">Datenschutzhinweisen</button>.</p>
+        </div>
+
+        <button class="gruppen-btn grau" data-aktion="infos-zurueck">Zurück</button>`;
+}
+
 // --- Datenschutzhinweise (Issue #22) ---
 
 function abschnittDatenschutz() {
@@ -1543,7 +1611,7 @@ function abschnittDatenschutz() {
 
         <div class="ds-block">
             <div class="ds-titel">Links zu externen Seiten</div>
-            <p>Auf den Filmkarten findest du Verweise zu IMDb und TMDb. Beim Anklicken
+            <p>Auf den Filmkarten findest du Verweise zu IMDb und TMDB. Beim Anklicken
                verlässt du diese Seite; ab dann gelten die Datenschutzbestimmungen des
                jeweiligen Anbieters.</p>
             <p>Für die Inhalte externer Seiten übernehme ich keine Haftung. Zum
@@ -1569,6 +1637,12 @@ function zeichneFenster() {
 
     if (ladeVorgang) {
         inhalt.innerHTML = '<p class="gruppen-hinweis">Einen Moment...</p>';
+        return;
+    }
+
+    if (ansicht === 'infos') {
+        if (titelEl) titelEl.textContent = 'Infos zum Fan Guide';
+        inhalt.innerHTML = abschnittInfos();
         return;
     }
 
@@ -1679,6 +1753,11 @@ function fensterKlicks(event) {
         accountLoeschen(document.getElementById('loeschen-bewertungen')?.checked !== false);
     }
 
+    if (aktion === 'infos-zurueck') {
+        ansicht = vorherigeAnsicht || 'konto';
+        zeichneFenster();
+    }
+
     // Datenschutzhinweise (Issue #22)
     if (aktion === 'datenschutz') {
         vorherigeAnsicht = ansicht;
@@ -1775,6 +1854,10 @@ window.openKontoPanel       = oeffneKontoFenster;
 window.openDatenschutz      = () => {
     vorherigeAnsicht = 'konto';
     fensterOeffnen('datenschutz');
+};
+window.openInfos            = () => {
+    vorherigeAnsicht = 'konto';
+    fensterOeffnen('infos');
 };
 window.closeGroupPanel      = schliesseGruppenFenster;
 window.getKontoLabel        = () => (istEchtAngemeldet() ? 'Mein Profil' : 'Login');

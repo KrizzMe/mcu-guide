@@ -307,13 +307,10 @@ function renderMovieRuntime(movie) {
 }
 
 function renderMovieMeta(movie) {
-    const imdbLink = movie.imdb
-        ? `<a href="${escapeHtml(movie.imdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf IMDb ansehen"><img class="meta-icon" src="imdb.png" alt="IMDb" loading="lazy"></a>`
-        : '';
     const tmdbLink = movie.tmdb
-        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDb ansehen"><img class="meta-icon" src="tmdb.png" alt="TMDb" loading="lazy"></a>`
+        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
         : '';
-    return `<div class="movie-meta-left">${imdbLink}${tmdbLink}</div>`;
+    return `<div class="movie-meta-left">${tmdbLink}</div>`;
 }
 
 // --- Bewertungen der Gruppe auf den Filmkarten (Issue #16, Schritt 6) ---

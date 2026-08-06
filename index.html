@@ -749,6 +749,43 @@
             color: var(--text-muted);
         }
 
+        /* TMDB-Attribution. Das Logo muss unverändert bleiben (Farbe,
+           Seitenverhältnis, nicht gespiegelt oder gedreht) und weniger
+           prominent sein als das eigene Logo - deshalb bewusst klein. */
+        .tmdb-attribution {
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+
+        .tmdb-untertitel {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        .tmdb-logo {
+            height: 26px;
+            width: auto;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .tmdb-notice {
+            font-size: 0.85rem !important;
+            color: var(--text-color) !important;
+            margin-bottom: 6px !important;
+        }
+
+        .tmdb-erklaerung {
+            font-size: 0.8rem !important;
+            color: var(--text-muted) !important;
+            margin-bottom: 6px !important;
+        }
+
         /* --- Datenschutzhinweise (Issue #22) --- */
         .ds-block {
             margin-bottom: 16px;
@@ -1165,6 +1202,8 @@
     <!-- Fixierter Footer unten -->
     <footer>
         <p>(c) Marvel - Cinematic Experience  Fan Guide by KrizzMe - 2026
+           <span class="footer-trenner">·</span>
+           <button class="footer-link" onclick="window.openInfos && window.openInfos()">Infos zum Fan Guide</button>
            <span class="footer-trenner">·</span>
            <button class="footer-link" onclick="window.openDatenschutz && window.openDatenschutz()">Datenschutzhinweise</button>
         </p>
