@@ -364,6 +364,15 @@
             min-width: 0;
         }
 
+        /* Kurzzeitiger Ladezustand, bis Titel/Laufzeit von TMDB
+           eingetroffen sind (meist nur beim ersten Besuch spürbar, siehe
+           Zwischenspeicherung in tmdbDetailsFuerAlleLaden). */
+        .movie-title.laedt {
+            color: var(--text-muted);
+            font-weight: normal;
+            font-style: italic;
+        }
+
         /* --- Fortschritts-Anzeige (Issue #3) ---
            Der frühere separate Fortschrittsbalken wurde entfernt - der
            Fortschritt wird stattdessen direkt in die Navigations-Buttons

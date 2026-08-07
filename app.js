@@ -301,14 +301,14 @@ function renderRatingWidget(movieId) {
 }
 
 function renderMovieRuntime(movie) {
-    return movie.runtime
-        ? `<span class="movie-runtime"><span class="runtime-icon" aria-hidden="true">🎞️</span>${escapeHtml(movie.runtime)}</span>`
-        : '';
+    // Platzhalter - wird von titelUndLaufzeitAnzeigen() befüllt, sobald
+    // Titel/Laufzeit aus dem Cache oder von TMDB vorliegen.
+    return `<span class="movie-runtime" data-laufzeit-slot="${movie.id}"></span>`;
 }
 
 function renderMovieMeta(movie) {
     const tmdbLink = movie.tmdb
-        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
+        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" data-tmdb-label-slot="${movie.id}" aria-label="Film auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
         : '';
     const tmdbId = extractTmdbId(movie.tmdb);
     const trailerBtn = tmdbId
@@ -399,6 +399,110 @@ function extractTmdbId(tmdbUrl) {
     return treffer ? treffer[1] : null;
 }
 
+// --- Titel und Laufzeit live über TMDB ---
+// moviedata.json enthält bewusst keinen Text mehr dafür - beides wird
+// bei jedem Aufruf aktuell nachgeladen. Um die Seite trotzdem schnell
+// zu halten und nicht bei jedem Besuch 47 Anfragen an TMDB zu stellen:
+// 1. alle Filme WERDEN GLEICHZEITIG statt nacheinander abgefragt
+// 2. das Ergebnis wird 7 Tage lokal zwischengespeichert
+const TMDB_DETAILS_CACHE_KEY = 'mcu-tmdb-details-cache';
+const TMDB_DETAILS_GUELTIG_MS = 7 * 24 * 60 * 60 * 1000; // 7 Tage
+
+function tmdbDetailsCacheLesen() {
+    try {
+        return JSON.parse(localStorage.getItem(TMDB_DETAILS_CACHE_KEY) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function tmdbDetailsCacheSchreiben(cache) {
+    try {
+        localStorage.setItem(TMDB_DETAILS_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+        console.warn('TMDB-Cache konnte nicht gespeichert werden:', e);
+    }
+}
+
+// Liste aller Filme mit einer aus dem tmdb-Link auslesbaren Kennung.
+function alleMovieTmdbIds() {
+    const liste = [];
+    MOVIE_DATA.forEach(section => {
+        section.movies.forEach(movie => {
+            const tmdbId = extractTmdbId(movie.tmdb);
+            if (tmdbId) liste.push({ id: movie.id, tmdbId });
+        });
+    });
+    return liste;
+}
+
+// Trägt Titel und Laufzeit an allen Stellen nach, an denen sie
+// gebraucht werden (sichtbarer Titel, Laufzeit-Badge, TMDB-Icon-Label,
+// Poster-Alternativtext) - unabhängig davon, ob der Wert aus dem Cache
+// oder frisch von TMDB kommt.
+function titelUndLaufzeitAnzeigen(movieId, titel, laufzeit) {
+    const titelEl = document.querySelector(`[data-titel-slot="${movieId}"]`);
+    if (titelEl) {
+        titelEl.textContent = titel;
+        titelEl.classList.remove('laedt');
+    }
+
+    const laufzeitEl = document.querySelector(`[data-laufzeit-slot="${movieId}"]`);
+    if (laufzeitEl) {
+        laufzeitEl.innerHTML = laufzeit
+            ? `<span class="runtime-icon" aria-hidden="true">🎞️</span>${escapeHtml(laufzeit)}`
+            : '';
+    }
+
+    const tmdbLinkEl = document.querySelector(`[data-tmdb-label-slot="${movieId}"]`);
+    if (tmdbLinkEl) tmdbLinkEl.setAttribute('aria-label', titel + ' auf TMDB ansehen');
+
+    const posterImgEl = document.querySelector(`.movie-card[data-movie-id="${movieId}"] .movie-poster img`);
+    if (posterImgEl) posterImgEl.alt = titel;
+}
+
+// Lädt Titel + Laufzeit für alle übergebenen Filme. Bereits gültige
+// Cache-Einträge werden sofort angezeigt (kein Warten), nur wirklich
+// veraltete oder fehlende Einträge werden parallel neu abgefragt.
+async function tmdbDetailsFuerAlleLaden(movieList) {
+    const cache = tmdbDetailsCacheLesen();
+    const jetzt = Date.now();
+    const zuLaden = [];
+
+    movieList.forEach(({ id, tmdbId }) => {
+        const eintrag = cache[tmdbId];
+        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS) {
+            titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit);
+        } else {
+            zuLaden.push({ id, tmdbId });
+        }
+    });
+
+    if (zuLaden.length === 0) return;
+
+    await Promise.all(zuLaden.map(async ({ id, tmdbId }) => {
+        try {
+            const url = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=de-DE`;
+            const antwort = await fetch(url);
+            if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
+            const daten = await antwort.json();
+
+            const jahr = (daten.release_date || '').slice(0, 4) || '????';
+            const rohtitel = daten.title || daten.original_title || 'Unbekannter Titel';
+            const titel = `${rohtitel} (${jahr})`;
+            const laufzeit = daten.runtime ? `${daten.runtime} Min.` : '---';
+
+            cache[tmdbId] = { title: titel, laufzeit, cachedAt: Date.now() };
+            titelUndLaufzeitAnzeigen(id, titel, laufzeit);
+        } catch (err) {
+            console.warn('Titel/Laufzeit konnten nicht geladen werden für', id, err);
+            titelUndLaufzeitAnzeigen(id, 'Titel nicht verfügbar', '');
+        }
+    }));
+
+    tmdbDetailsCacheSchreiben(cache);
+}
+
 function waehleTrailer(videos) {
     if (!Array.isArray(videos)) return null;
     const kandidaten = videos.filter(v => v.site === 'YouTube' && v.type === 'Trailer');
@@ -441,11 +545,11 @@ function renderMovieCard(movie) {
     return `
 <div class="movie-card${watchedClass}" data-movie-id="${movie.id}" onclick="openOverlay(this)">
     <div class="movie-poster">
-        <img src="${movie.poster}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="handlePosterError(this)">
+        <img src="${movie.poster}" alt="Filmposter" loading="lazy" onerror="handlePosterError(this)">
     </div>
     <div class="movie-content">
         <div class="movie-title-row">
-            <div class="movie-title">${escapeHtml(movie.title)}</div>
+            <div class="movie-title laedt" data-titel-slot="${movie.id}">Lädt…</div>
             ${renderMovieRuntime(movie)}
         </div>
         <div class="movie-desc">${escapeHtml(movie.desc)}</div>
@@ -467,6 +571,12 @@ ${section.movies.map(renderMovieCard).join('')}
     container.innerHTML = sectionsHtml;
     updateProgress();
     updateGroupDisplay();   // falls Gruppendaten bereits vorliegen
+
+    // Titel und Laufzeit stehen nicht mehr in moviedata.json, sondern
+    // werden live von TMDB nachgeladen (mit Zwischenspeicherung, siehe
+    // tmdbDetailsFuerAlleLaden). Läuft im Hintergrund, blockiert also
+    // nicht den Aufbau der restlichen Karte.
+    tmdbDetailsFuerAlleLaden(alleMovieTmdbIds());
 }
 
 // Lädt moviedata.json und rendert erst danach Navigation und Filmkarten.
@@ -509,8 +619,11 @@ function validateMovieData(raw) {
                 result.skippedMovies++;
                 return;
             }
-            if (!movie.id || !movie.title) {
-                console.warn(`Film ${mIdx + 1} in "${section.title}" übersprungen: "id" oder "title" fehlt.`, movie);
+            // "tmdb" ist jetzt Pflicht statt "title": Titel und Laufzeit
+            // werden live von TMDB nachgeladen, ohne Link gäbe es beides
+            // nicht - der Film wäre unbenutzbar.
+            if (!movie.id || !movie.tmdb) {
+                console.warn(`Film ${mIdx + 1} in "${section.title}" übersprungen: "id" oder "tmdb" fehlt.`, movie);
                 result.skippedMovies++;
                 return;
             }
@@ -519,8 +632,7 @@ function validateMovieData(raw) {
             validMovies.push({
                 ...movie,
                 desc: movie.desc || '',
-                poster: movie.poster || '',
-                runtime: movie.runtime || ''
+                poster: movie.poster || ''
             });
         });
 
