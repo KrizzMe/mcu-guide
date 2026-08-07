@@ -1585,9 +1585,14 @@ function abschnittDatenschutz() {
                 <li>Die technischen Bausteine der Anmeldung werden bei jedem
                     Seitenaufruf von einem Google-Server geladen; dabei wird deine
                     IP-Adresse an Google übertragen</li>
+                <li>Beim Antippen von "Trailer ansehen" fragt dein Browser direkt bei
+                    TMDB die aktuellen Trailer-Daten ab und bindet anschließend den
+                    YouTube-Player ein (datenschutzfreundliche Adresse
+                    youtube-nocookie.com). Beides passiert erst nach deinem Klick,
+                    nicht beim bloßen Betrachten der Filmliste</li>
             </ul>
-            <p>Beide Anbieter verarbeiten die Daten ausschließlich als technische
-               Dienstleister im Auftrag.</p>
+            <p>Alle genannten Anbieter verarbeiten die Daten ausschließlich als
+               technische Dienstleister im Auftrag.</p>
         </div>
 
         <div class="ds-block">

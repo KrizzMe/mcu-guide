@@ -310,7 +310,11 @@ function renderMovieMeta(movie) {
     const tmdbLink = movie.tmdb
         ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
         : '';
-    return `<div class="movie-meta-left">${tmdbLink}</div>`;
+    const tmdbId = extractTmdbId(movie.tmdb);
+    const trailerBtn = tmdbId
+        ? `<button class="trailer-karten-btn" data-tmdb-id="${tmdbId}" onclick="trailerVonKarteOeffnen(this, event)">🎬 Trailer</button>`
+        : '';
+    return `<div class="movie-meta-left">${tmdbLink}${trailerBtn}</div>`;
 }
 
 // --- Bewertungen der Gruppe auf den Filmkarten (Issue #16, Schritt 6) ---
@@ -370,6 +374,67 @@ function updateGroupDisplay(movieId) {
 
 // groups.js meldet über diesen Weg, dass neue Gruppendaten vorliegen.
 window.onGruppeAktualisiert = () => updateGroupDisplay();
+
+// --- Trailer live über TMDB abfragen (Issue Trailer-Einbindung) ---
+// Bewusst KEINE feste Speicherung: zeigt immer den Trailer, den TMDB
+// aktuell führt, auch wenn sich das zugrundeliegende YouTube-Video
+// ändert. Getestet und bestätigt: der Browser darf die TMDB-API direkt
+// ansprechen, keine CORS-Sperre.
+//
+// Der Schlüssel steht zwangsläufig im öffentlichen Quelltext (wie der
+// Firebase-Schlüssel), hier aber ohne serverseitige Zugriffsregeln als
+// zweite Absicherung - bekanntes, akzeptiertes Restrisiko bei kleinem
+// Projekt und TMDBs großzügigem kostenlosen Kontingent.
+const TMDB_API_KEY = 'f95f3fc3a440179586a593719e24375c';
+
+// Vermeidet, denselben Film innerhalb einer Sitzung mehrfach abzufragen.
+const trailerCache = {};
+
+// Liest die TMDB-Film-Kennung aus dem bereits vorhandenen tmdb-Link
+// (z. B. aus .../movie/557-spider-man wird 557) - kein eigenes
+// Datenfeld nötig.
+function extractTmdbId(tmdbUrl) {
+    if (!tmdbUrl) return null;
+    const treffer = tmdbUrl.match(/themoviedb\.org\/movie\/(\d+)/);
+    return treffer ? treffer[1] : null;
+}
+
+function waehleTrailer(videos) {
+    if (!Array.isArray(videos)) return null;
+    const kandidaten = videos.filter(v => v.site === 'YouTube' && v.type === 'Trailer');
+    if (kandidaten.length === 0) return null;
+    // Offiziellen Trailer bevorzugen, sonst den erstbesten nehmen -
+    // besser irgendein Trailer als gar keiner.
+    return kandidaten.find(v => v.official) || kandidaten[0];
+}
+
+async function trailerAbfragen(tmdbId, sprache) {
+    const url = sprache
+        ? `https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}&language=${sprache}`
+        : `https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}`;
+    const antwort = await fetch(url);
+    if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
+    const daten = await antwort.json();
+    return waehleTrailer(daten.results);
+}
+
+async function trailerLaden(tmdbId) {
+    if (trailerCache[tmdbId] !== undefined) return trailerCache[tmdbId];
+
+    try {
+        let treffer = await trailerAbfragen(tmdbId, 'de-DE');
+        if (!treffer) {
+            // Kein deutscher Trailer hinterlegt - auf Englisch ausweichen
+            treffer = await trailerAbfragen(tmdbId, null);
+        }
+        trailerCache[tmdbId] = treffer;
+        return treffer;
+    } catch (err) {
+        console.warn('Trailer konnte nicht geladen werden:', err);
+        trailerCache[tmdbId] = null;
+        return null;
+    }
+}
 
 function renderMovieCard(movie) {
     const watchedClass = getRating(movie.id) > 0 ? ' watched' : '';
@@ -548,3 +613,4 @@ function buildErrorMessage(err) {
 }
 
 fetchAndRender();
+
