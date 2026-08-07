@@ -1,6 +1,6 @@
 {
-  "name": "Marvel Cinematic Experience Fan Guide",
-  "short_name": "MCU Guide",
+  "name": "My Movie Guide",
+  "short_name": "Movie Guide",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#121212",

@@ -51,7 +51,7 @@ let ladeVorgang     = false;
 let einladung       = null;   // { groupId, inviteCode, name, locked } bei offener Einladung
 
 // Welche Ansicht das Fenster gerade zeigt:
-// 'gruppen' | 'konto' | 'datenschutz' | 'infos'
+// 'gruppen' | 'konto' | 'datenschutz' | 'infos' | 'listen'
 // | 'loeschen-hinweis' | 'loeschen-admin' | 'loeschen-final'
 let ansicht = 'gruppen';
 
@@ -1438,6 +1438,42 @@ function abschnittLoeschenFinal() {
         <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Abbrechen</button>`;
 }
 
+// --- Filmreihen wechseln (Relaunch Stufe 1) ---
+// Die eigentliche Lade-/Wechsel-Logik lebt in app.js (listeWechseln,
+// VERFUEGBARE_LISTEN) - hier nur die Anzeige im gewohnten Fenster.
+
+function abschnittListen() {
+    const listen = typeof window.getVerfuegbareListen === 'function'
+        ? window.getVerfuegbareListen()
+        : [];
+    const aktiveId = typeof window.getAktiveListeId === 'function'
+        ? window.getAktiveListeId()
+        : null;
+
+    if (listen.length === 0) {
+        return '<p class="gruppen-hinweis">Keine Filmreihen verfügbar.</p>';
+    }
+
+    const eintraege = listen.map(l => `
+        <div class="mitglied-zeile">
+            <div class="mitglied-kopf">
+                <span class="mitglied-name">${sicher(l.name)}</span>
+                ${l.id === aktiveId ? '<span class="gruppen-status">aktiv</span>' : ''}
+            </div>
+            ${l.id === aktiveId
+                ? ''
+                : `<button class="gruppen-btn schmal" data-aktion="liste-wechseln" data-liste-id="${sicher(l.id)}">Auswählen</button>`}
+        </div>`).join('');
+
+    return `
+        <p class="gruppen-hinweis">
+            Wähle, welche Filmreihe angezeigt werden soll. Bewertungen bleiben
+            beim Wechseln erhalten - sie sind pro Film gespeichert, unabhängig
+            davon, welche Liste gerade aktiv ist.
+        </p>
+        ${eintraege}`;
+}
+
 // --- Infos zum Fan Guide (Issue #24) ---
 // Enthält die von TMDB vorgeschriebene Attribution. Die Vorgabe verlangt
 // einen Bereich vom Typ "About"/"Credits", den wörtlichen englischen
@@ -1447,10 +1483,10 @@ function abschnittInfos() {
     return `
         <div class="ds-block">
             <div class="ds-titel">Was ist das hier?</div>
-            <p>Eine private Übersicht der Filme des Marvel Cinematic Universe und
-               einiger wichtiger Zusatzfilme - sortiert in einer selbst
-               zusammengestellten Reihenfolge, die sich für gemeinsame Filmabende
-               bewährt hat.</p>
+            <p>Eine private Übersicht mehrerer Filmreihen - aktuell das Marvel
+               Cinematic Universe und Star Wars, weitere folgen - jeweils sortiert
+               in einer selbst zusammengestellten Reihenfolge, die sich für
+               gemeinsame Filmabende bewährt hat.</p>
         </div>
 
         <div class="ds-block">
@@ -1645,6 +1681,12 @@ function zeichneFenster() {
         return;
     }
 
+    if (ansicht === 'listen') {
+        if (titelEl) titelEl.textContent = 'Filmreihe wählen';
+        inhalt.innerHTML = abschnittListen();
+        return;
+    }
+
     if (ansicht === 'infos') {
         if (titelEl) titelEl.textContent = 'Infos zum Fan Guide';
         inhalt.innerHTML = abschnittInfos();
@@ -1762,6 +1804,12 @@ function fensterKlicks(event) {
         ansicht = vorherigeAnsicht || 'konto';
         zeichneFenster();
     }
+    if (aktion === 'liste-wechseln') {
+        const listeId = ziel.dataset.listeId;
+        if (typeof window.listeWechseln === 'function' && listeId) {
+            window.listeWechseln(listeId).then(() => zeichneFenster());
+        }
+    }
 
     // Datenschutzhinweise (Issue #22)
     if (aktion === 'datenschutz') {
@@ -1856,6 +1904,7 @@ window.addEventListener('online', () => {
 // Für andere Dateien erreichbar machen
 window.openGroupPanel       = oeffneGruppenFenster;
 window.openKontoPanel       = oeffneKontoFenster;
+window.openListenPanel      = () => fensterOeffnen('listen');
 window.openDatenschutz      = () => {
     vorherigeAnsicht = 'konto';
     fensterOeffnen('datenschutz');

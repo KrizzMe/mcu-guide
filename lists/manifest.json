@@ -1,0 +1,14 @@
+[
+  {
+    "id": "mcu",
+    "name": "Marvel Cinematic Universe",
+    "kurzname": "MCU",
+    "datei": "lists/mcu.json"
+  },
+  {
+    "id": "star-wars",
+    "name": "Star Wars",
+    "kurzname": "Star Wars",
+    "datei": "lists/star-wars.json"
+  }
+]
