@@ -1,7 +1,8 @@
 /* =====================================================================
    app.js - Datenhaltung, Rendering und Bewertungen
    ---------------------------------------------------------------------
-   Zuständig für: Laden und Validieren von moviedata.json, Aufbau der
+   Zuständig für: Laden und Validieren der aktiven Filmliste (siehe
+   lists/manifest.json), Aufbau der
    Navigation und Filmkarten, Popcorn-Bewertungen sowie die daraus
    abgeleitete Fortschrittsanzeige.
 
@@ -53,10 +54,20 @@ function kontoNavLabel() {
         : 'Login';
 }
 
+// Beschriftung des Listen-Eintrags: Name der aktiven Filmreihe.
+function listeNavLabel() {
+    const eintrag = findeListeNachId(aktiveListeId);
+    return eintrag ? eintrag.kurzname : 'Listen';
+}
+
 function renderNav() {
     const nav = document.getElementById('mobileNav');
     const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
     const homeLink = `<a href="#top" class="nav-home" data-fill-key="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home <span class="nav-progress" data-progress-key="nav-home"></span></a>`;
+    // Home und Listen bilden zusammen den "wo bin ich"-Block (welche
+    // Filmreihe wird gerade angezeigt) - abgesetzt vom Konto/Gruppen-
+    // Block und von den Sektionen der aktiven Liste.
+    const listenLink = `<a href="#" class="nav-listen" data-nav-listen title="Filmreihe wechseln"><span class="nav-listen-icon">📚</span> ${escapeHtml(listeNavLabel())}</a>`;
     // Konto und Gruppen bilden zusammen einen Block, abgesetzt von Home
     // und von den Sektionen (Logik jeweils in groups.js).
     const kontoLink = `<a href="#" class="nav-konto" data-nav-konto title="Konto verwalten"><span class="nav-konto-icon">👤</span> ${escapeHtml(kontoNavLabel())}</a>`;
@@ -66,7 +77,7 @@ function renderNav() {
     const links = MOVIE_DATA.map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
-    nav.innerHTML = closeButton + homeLink + trenner + kontoLink + groupLink + trenner + links;
+    nav.innerHTML = closeButton + homeLink + listenLink + trenner + kontoLink + groupLink + trenner + links;
 
     // Klick-Handler per addEventListener statt Inline-onclick binden.
     // Robuster als String-Interpolation in onclick-Attributen, da so
@@ -80,6 +91,15 @@ function renderNav() {
 
     // groups.js wird als Modul geladen und ist eventuell noch nicht bereit -
     // deshalb erst beim Klick nachsehen, ob die Funktion existiert.
+    nav.querySelector('[data-nav-listen]').addEventListener('click', event => {
+        event.preventDefault();
+        closeSidebar();
+        if (typeof window.openListenPanel === 'function') {
+            window.openListenPanel();
+        } else {
+            console.warn('Listenverwaltung noch nicht geladen.');
+        }
+    });
     nav.querySelector('[data-nav-konto]').addEventListener('click', event => {
         event.preventDefault();
         closeSidebar();
@@ -119,6 +139,9 @@ function updateNavLabels() {
 
 window.onAktiveGruppeGeaendert = updateNavLabels;
 window.onKontoStatusGeaendert = updateNavLabels;
+window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({ id: l.id, name: l.name }));
+window.getAktiveListeId = () => aktiveListeId;
+window.listeWechseln = listeWechseln;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -591,7 +614,7 @@ function validateMovieData(raw) {
     const result = { sections: [], skippedSections: 0, skippedMovies: 0 };
 
     if (!Array.isArray(raw)) {
-        console.error('moviedata.json enthält kein Array auf oberster Ebene.');
+        console.error('Filmliste enthält kein Array auf oberster Ebene.');
         return result;
     }
 
@@ -657,18 +680,68 @@ function handlePosterError(imgElement) {
     console.warn('Poster konnte nicht geladen werden:', imgElement.getAttribute('src'));
 }
 
-async function fetchAndRender() {
-    const container = document.querySelector('.container.content-wrapper');
+// --- Mehrere Filmreihen (Relaunch Stufe 1) ---
+// Statt einer festen Datei gibt es jetzt einen Katalog verfügbarer
+// Listen (lists/manifest.json). Die zuletzt gewählte Liste wird lokal
+// gemerkt, Bewertungen und Gruppen bleiben davon unberührt - Film-IDs
+// (Titel+Jahr) sind listenübergreifend eindeutig, dasselbe Speicher-
+// schema funktioniert also unverändert weiter.
+const AKTIVE_LISTE_KEY = 'mcu-aktive-liste';
+let VERFUEGBARE_LISTEN = [];
+let aktiveListeId = null;
+
+function aktiveListeIdLesen() {
     try {
-        const response = await fetch('moviedata.json');
+        return localStorage.getItem(AKTIVE_LISTE_KEY);
+    } catch (e) {
+        return null;
+    }
+}
+
+function aktiveListeIdSchreiben(listeId) {
+    try {
+        localStorage.setItem(AKTIVE_LISTE_KEY, listeId);
+    } catch (e) {
+        console.warn('Listenauswahl konnte nicht gespeichert werden:', e);
+    }
+}
+
+function findeListeNachId(listeId) {
+    return VERFUEGBARE_LISTEN.find(l => l.id === listeId) || null;
+}
+
+// Wechselt zu einer anderen Liste: lädt deren Daten, baut Navigation
+// und Inhalt neu auf. Wird vom "Listen"-Bereich aus aufgerufen.
+async function listeWechseln(listeId) {
+    const eintrag = findeListeNachId(listeId);
+    if (!eintrag) {
+        console.warn('Unbekannte Liste:', listeId);
+        return;
+    }
+    aktiveListeId = listeId;
+    aktiveListeIdSchreiben(listeId);
+    await ladeUndRendereAktiveListe();
+    if (typeof window.onAktiveListeGeaendert === 'function') {
+        window.onAktiveListeGeaendert();
+    }
+}
+
+async function ladeUndRendereAktiveListe() {
+    const container = document.querySelector('.container.content-wrapper');
+    const eintrag = findeListeNachId(aktiveListeId);
+    if (!eintrag) {
+        container.innerHTML = buildErrorMessage(new Error('NO_VALID_DATA'));
+        return;
+    }
+
+    try {
+        const response = await fetch(eintrag.datei);
         if (!response.ok) throw new Error('HTTP ' + response.status);
 
         let raw;
         try {
             raw = await response.json();
         } catch (parseErr) {
-            // JSON-Syntaxfehler getrennt behandeln - andere Ursache,
-            // andere Lösung als ein fehlgeschlagener Download.
             throw new Error('INVALID_JSON');
         }
 
@@ -689,7 +762,32 @@ async function fetchAndRender() {
             );
         }
     } catch (err) {
-        console.error('Konnte Filmdaten nicht laden:', err);
+        console.error('Konnte Liste nicht laden:', eintrag.id, err);
+        container.innerHTML = buildErrorMessage(err);
+    }
+}
+
+async function fetchAndRender() {
+    const container = document.querySelector('.container.content-wrapper');
+    try {
+        const response = await fetch('lists/manifest.json');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const katalog = await response.json();
+
+        if (!Array.isArray(katalog) || katalog.length === 0) {
+            throw new Error('NO_VALID_DATA');
+        }
+
+        VERFUEGBARE_LISTEN = katalog;
+
+        const gespeichert = aktiveListeIdLesen();
+        aktiveListeId = (gespeichert && findeListeNachId(gespeichert))
+            ? gespeichert
+            : katalog[0].id;
+
+        await ladeUndRendereAktiveListe();
+    } catch (err) {
+        console.error('Konnte Listen-Katalog nicht laden:', err);
         container.innerHTML = buildErrorMessage(err);
     }
 }
@@ -706,7 +804,7 @@ function buildErrorMessage(err) {
     }
     if (err && err.message === 'INVALID_JSON') {
         return wrap(
-            '<code>moviedata.json</code> konnte nicht gelesen werden - die Datei ist ' +
+            'Die Filmliste konnte nicht gelesen werden - die Datei ist ' +
             'vermutlich fehlerhaft (z.&nbsp;B. ein fehlendes oder überzähliges Komma). ' +
             'Details stehen in der Browser-Konsole.'
         );
@@ -720,9 +818,8 @@ function buildErrorMessage(err) {
     return wrap(
         'Filmdaten konnten nicht geladen werden. Läuft die Seite über ' +
         'http(s) (z.&nbsp;B. GitHub Pages oder einen lokalen Webserver) und ' +
-        'liegt <code>moviedata.json</code> im selben Ordner wie diese Datei?'
+        'liegt <code>lists/manifest.json</code> im selben Ordner wie diese Datei?'
     );
 }
 
 fetchAndRender();
-

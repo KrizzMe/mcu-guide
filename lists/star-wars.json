@@ -1,0 +1,77 @@
+[
+    {
+        "id": "Originaltrilogie",
+        "title": "Originaltrilogie",
+        "navLabel": "Original",
+        "movies": [
+            {
+                "id": "krieg-der-sterne-1977",
+                "poster": "posters/star-wars/krieg-der-sterne-1977.jpg",
+                "desc": "Der junge Farmerjunge Luke Skywalker schließt sich Obi-Wan Kenobi, Han Solo und der Rebellenallianz an, um Prinzessin Leia zu retten und den todbringenden Todesstern des Imperiums zu zerstören.",
+                "tmdb": "https://www.themoviedb.org/movie/11-star-wars"
+            },
+            {
+                "id": "das-imperium-schlagt-zuruck-1980",
+                "poster": "posters/star-wars/das-imperium-schlagt-zuruck-1980.jpg",
+                "desc": "Das Imperium schlägt zurück: Luke lernt bei Meister Yoda die Wege der Macht, während seine Freunde vor Darth Vader auf der Flucht sind - und eine schockierende Wahrheit ans Licht kommt.",
+                "tmdb": "https://www.themoviedb.org/movie/1891-the-empire-strikes-back"
+            },
+            {
+                "id": "die-ruckkehr-der-jedi-ritter-1983",
+                "poster": "posters/star-wars/die-ruckkehr-der-jedi-ritter-1983.jpg",
+                "desc": "Die Rebellen planen den finalen Schlag gegen das Imperium, während Luke sich seinem Schicksal und der Konfrontation mit seinem Vater stellt.",
+                "tmdb": "https://www.themoviedb.org/movie/1892-return-of-the-jedi"
+            }
+        ]
+    },
+    {
+        "id": "Prequel_Trilogie",
+        "title": "Prequel-Trilogie",
+        "navLabel": "Prequels",
+        "movies": [
+            {
+                "id": "star-wars-episode-i-die-dunkle-bedrohung-1999",
+                "poster": "posters/star-wars/star-wars-episode-i-die-dunkle-bedrohung-1999.jpg",
+                "desc": "Die Jedi-Ritter Qui-Gon Jinn und Obi-Wan Kenobi entdecken den jungen Anakin Skywalker, während ein politischer Konflikt die Republik erschüttert und die Bedrohung durch die Sith zurückkehrt.",
+                "tmdb": "https://www.themoviedb.org/movie/1893-star-wars-episode-i-the-phantom-menace"
+            },
+            {
+                "id": "star-wars-episode-ii-angriff-der-klonkrieger-2002",
+                "poster": "posters/star-wars/star-wars-episode-ii-angriff-der-klonkrieger-2002.jpg",
+                "desc": "Zehn Jahre später ist Anakin zum jungen Jedi-Ritter herangewachsen. Eine Verschwörung führt zum Ausbruch der Klonkriege, während sich seine verbotene Liebe zu Padmé Amidala entwickelt.",
+                "tmdb": "https://www.themoviedb.org/movie/1894-star-wars-episode-ii-attack-of-the-clones"
+            },
+            {
+                "id": "star-wars-episode-iii-die-rache-der-sith-2005",
+                "poster": "posters/star-wars/star-wars-episode-iii-die-rache-der-sith-2005.jpg",
+                "desc": "Die Klonkriege toben, doch die eigentliche Gefahr lauert näher: Anakins Weg zur dunklen Seite der Macht besiegelt den Untergang der Jedi und die Geburt von Darth Vader.",
+                "tmdb": "https://www.themoviedb.org/movie/1895-star-wars-episode-iii-revenge-of-the-sith"
+            }
+        ]
+    },
+    {
+        "id": "Sequel_Trilogie",
+        "title": "Sequel-Trilogie",
+        "navLabel": "Sequels",
+        "movies": [
+            {
+                "id": "star-wars-das-erwachen-der-macht-2015",
+                "poster": "posters/star-wars/star-wars-das-erwachen-der-macht-2015.jpg",
+                "desc": "Jahrzehnte nach dem Sieg über das Imperium bedroht die Erste Ordnung die Galaxis. Die Schrotthändlerin Rey entdeckt eine Verbindung zur Macht, die ihr Leben für immer verändert.",
+                "tmdb": "https://www.themoviedb.org/movie/140607-star-wars-the-force-awakens"
+            },
+            {
+                "id": "star-wars-die-letzten-jedi-2017",
+                "poster": "posters/star-wars/star-wars-die-letzten-jedi-2017.jpg",
+                "desc": "Rey sucht den zurückgezogenen Luke Skywalker auf, während der Widerstand gegen die Erste Ordnung ums Überleben kämpft und Kylo Ren mit seinem inneren Konflikt ringt.",
+                "tmdb": "https://www.themoviedb.org/movie/181808-star-wars-the-last-jedi"
+            },
+            {
+                "id": "star-wars-der-aufstieg-skywalkers-2019",
+                "poster": "posters/star-wars/star-wars-der-aufstieg-skywalkers-2019.jpg",
+                "desc": "Der finale Kampf zwischen Widerstand und der Ersten Ordnung steht bevor - und eine dunkle Bedrohung aus der Vergangenheit kehrt zurück, um über die Zukunft der Galaxis zu entscheiden.",
+                "tmdb": "https://www.themoviedb.org/movie/181812-star-wars-the-rise-of-skywalker"
+            }
+        ]
+    }
+]
