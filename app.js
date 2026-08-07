@@ -45,20 +45,28 @@ function groupNavLabel() {
     return 'Gruppe: ' + gekuerzt;
 }
 
+// Beschriftung des Konto-Eintrags: vor der Anmeldung "Login",
+// danach "Mein Profil".
+function kontoNavLabel() {
+    return typeof window.getKontoLabel === 'function'
+        ? window.getKontoLabel()
+        : 'Login';
+}
+
 function renderNav() {
     const nav = document.getElementById('mobileNav');
     const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
     const homeLink = `<a href="#top" class="nav-home" data-fill-key="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home <span class="nav-progress" data-progress-key="nav-home"></span></a>`;
-    // Einstieg in die Gruppenverwaltung (Logik liegt in groups.js),
-    // bewusst direkt neben Home und vor den Sektionen.
+    // Konto und Gruppen bilden zusammen einen Block, abgesetzt von Home
+    // und von den Sektionen (Logik jeweils in groups.js).
+    const kontoLink = `<a href="#" class="nav-konto" data-nav-konto title="Konto verwalten"><span class="nav-konto-icon">👤</span> ${escapeHtml(kontoNavLabel())}</a>`;
     const groupLink = `<a href="#" class="nav-groups" data-nav-groups title="Gruppen verwalten"><span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}</a>`;
-    // Trennt den Bereich Home/Gruppe von den Sektionen. Auf Desktop ein
-    // senkrechter Strich, auf Mobil eine waagerechte Linie (siehe CSS).
+    // Auf Desktop senkrechter Strich, auf Mobil waagerechte Linie (siehe CSS)
     const trenner = `<span class="nav-trenner" aria-hidden="true"></span>`;
     const links = MOVIE_DATA.map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
-    nav.innerHTML = closeButton + homeLink + groupLink + trenner + links;
+    nav.innerHTML = closeButton + homeLink + trenner + kontoLink + groupLink + trenner + links;
 
     // Klick-Handler per addEventListener statt Inline-onclick binden.
     // Robuster als String-Interpolation in onclick-Attributen, da so
@@ -69,8 +77,18 @@ function renderNav() {
     nav.querySelectorAll('a[data-section-id]').forEach(link => {
         link.addEventListener('click', event => goToSection(event, link.dataset.sectionId));
     });
+
     // groups.js wird als Modul geladen und ist eventuell noch nicht bereit -
     // deshalb erst beim Klick nachsehen, ob die Funktion existiert.
+    nav.querySelector('[data-nav-konto]').addEventListener('click', event => {
+        event.preventDefault();
+        closeSidebar();
+        if (typeof window.openKontoPanel === 'function') {
+            window.openKontoPanel();
+        } else {
+            console.warn('Kontoverwaltung noch nicht geladen.');
+        }
+    });
     nav.querySelector('[data-nav-groups]').addEventListener('click', event => {
         event.preventDefault();
         closeSidebar();
@@ -82,18 +100,25 @@ function renderNav() {
     });
 }
 
-// Wird von groups.js aufgerufen, sobald der Name der aktiven Gruppe
-// feststeht oder sich ändert. Nur die Beschriftung neu setzen, statt
-// die ganze Navigation aufzubauen - so gehen die Klick-Handler und die
-// Fortschritts-Füllung nicht verloren.
-function updateGroupNavLabel() {
-    const eintrag = document.querySelector('[data-nav-groups]');
-    if (!eintrag) return;
-    eintrag.innerHTML =
-        `<span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}`;
+// Wird von groups.js aufgerufen, sobald sich Anmeldestatus oder aktive
+// Gruppe ändern. Nur die Beschriftungen neu setzen, statt die ganze
+// Navigation aufzubauen - so gehen Klick-Handler und Fortschritts-
+// Füllung nicht verloren.
+function updateNavLabels() {
+    const gruppe = document.querySelector('[data-nav-groups]');
+    if (gruppe) {
+        gruppe.innerHTML =
+            `<span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}`;
+    }
+    const konto = document.querySelector('[data-nav-konto]');
+    if (konto) {
+        konto.innerHTML =
+            `<span class="nav-konto-icon">👤</span> ${escapeHtml(kontoNavLabel())}`;
+    }
 }
 
-window.onAktiveGruppeGeaendert = updateGroupNavLabel;
+window.onAktiveGruppeGeaendert = updateNavLabels;
+window.onKontoStatusGeaendert = updateNavLabels;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -282,13 +307,10 @@ function renderMovieRuntime(movie) {
 }
 
 function renderMovieMeta(movie) {
-    const imdbLink = movie.imdb
-        ? `<a href="${escapeHtml(movie.imdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf IMDb ansehen"><img class="meta-icon" src="imdb.png" alt="IMDb" loading="lazy"></a>`
-        : '';
     const tmdbLink = movie.tmdb
-        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDb ansehen"><img class="meta-icon" src="tmdb.png" alt="TMDb" loading="lazy"></a>`
+        ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" aria-label="${escapeHtml(movie.title)} auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
         : '';
-    return `<div class="movie-meta-left">${imdbLink}${tmdbLink}</div>`;
+    return `<div class="movie-meta-left">${tmdbLink}</div>`;
 }
 
 // --- Bewertungen der Gruppe auf den Filmkarten (Issue #16, Schritt 6) ---

@@ -20,7 +20,7 @@ import { initializeApp }
     from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
 import {
     getAuth, onAuthStateChanged, signOut, signInAnonymously,
-    signInWithPopup, GoogleAuthProvider,
+    signInWithPopup, GoogleAuthProvider, reauthenticateWithPopup, deleteUser,
     sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 import {
@@ -49,6 +49,15 @@ let aktuellerNutzer = null;   // Firebase-Nutzer oder null
 let meineGruppen    = [];     // Gruppen, in denen ich Admin bin
 let ladeVorgang     = false;
 let einladung       = null;   // { groupId, inviteCode, name, locked } bei offener Einladung
+
+// Welche Ansicht das Fenster gerade zeigt:
+// 'gruppen' | 'konto' | 'datenschutz' | 'infos'
+// | 'loeschen-hinweis' | 'loeschen-admin' | 'loeschen-final'
+let ansicht = 'gruppen';
+
+// Ansicht, aus der die Datenschutzhinweise geöffnet wurden - damit
+// "Zurück" wieder dort landet (Login, Profil oder Fußzeile).
+let vorherigeAnsicht = 'konto';
 
 const SPEICHER_EMAIL    = 'mcu-anmelde-email';
 const SPEICHER_GRUPPEN  = 'mcu-gruppen';
@@ -97,10 +106,13 @@ function aktiveGruppeName() {
 }
 
 // app.js baut die Navigation auf, bevor dieses Modul geladen ist -
-// deshalb die Beschriftung nachträglich melden.
+// deshalb Beschriftungen nachträglich melden.
 function navBeschriftungAktualisieren() {
     if (typeof window.onAktiveGruppeGeaendert === 'function') {
         window.onAktiveGruppeGeaendert();
+    }
+    if (typeof window.onKontoStatusGeaendert === 'function') {
+        window.onKontoStatusGeaendert();
     }
 }
 
@@ -611,6 +623,142 @@ async function mitgliederNeuLaden(groupId) {
         console.warn('Mitglieder konnten nicht neu geladen werden:', err);
     }
     zeichneFenster();
+}
+
+// ---------------------------------------------------------------------
+// Kontoverwaltung (Issue #21)
+// ---------------------------------------------------------------------
+
+// Alle Gruppen, die mich betreffen: verwaltete (serverseitig ermittelt)
+// und solche, in denen ich nur Mitglied bin (lokal gemerkt).
+function meineGruppenUebersicht() {
+    const adminIds = new Set(meineGruppen.map(g => g.id));
+    const liste = meineGruppen.map(g => ({
+        groupId: g.id, name: g.name, rolle: 'admin', gesperrt: !!g.locked
+    }));
+    mitgliedschaftenLesen().forEach(m => {
+        if (adminIds.has(m.groupId)) return;
+        liste.push({
+            groupId: m.groupId, name: m.groupName, rolle: 'mitglied',
+            eigenerName: m.memberName
+        });
+    });
+    return liste;
+}
+
+function zurGruppenverwaltung(groupId) {
+    ansicht = 'gruppen';
+    const istAdminGruppe = meineGruppen.some(g => g.id === groupId);
+    if (istAdminGruppe) {
+        mitgliederVerwaltenUmschalten(groupId);
+    } else {
+        aktiveGruppeSetzen(groupId);
+        zeichneFenster();
+    }
+}
+
+// Prüft, ob dem Löschen noch Admin-Rollen im Weg stehen.
+async function loeschenFortsetzen() {
+    meldung('Prüfe deine Gruppen...');
+    await eigeneGruppenLaden();
+    meldungLeeren();
+    ansicht = meineGruppen.length > 0 ? 'loeschen-admin' : 'loeschen-final';
+    zeichneFenster();
+}
+
+function lokaleDatenLoeschen(auchBewertungen) {
+    const zuLoeschen = [SPEICHER_GRUPPEN, SPEICHER_AKTIV,
+                        SPEICHER_WARTESCHLANGE, SPEICHER_EMAIL];
+    zuLoeschen.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) { /* egal */ }
+    });
+
+    if (!auchBewertungen) return;
+
+    // Bewertungs-Schlüssel erst sammeln, dann löschen - während des
+    // Entfernens verschieben sich sonst die Indizes.
+    const schluessel = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith(RATING_PRAEFIX) || k === 'mcu-rating-times')) {
+            schluessel.push(k);
+        }
+    }
+    schluessel.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) { /* egal */ }
+    });
+}
+
+async function accountLoeschen(auchBewertungen) {
+    if (!istEchtAngemeldet()) return;
+    const nutzer = aktuellerNutzer;
+
+    try {
+        meldung('Entferne dich aus deinen Gruppen...');
+
+        // 1. Aus allen bekannten Gruppen austreten. Fehler einzelner
+        //    Gruppen dürfen den Vorgang nicht abbrechen - z. B. wenn eine
+        //    Gruppe zwischenzeitlich gelöscht wurde.
+        for (const m of mitgliedschaftenLesen()) {
+            try {
+                await deleteDoc(doc(db, 'groups', m.groupId, 'members', nutzer.uid));
+            } catch (err) {
+                console.warn('Austritt aus ' + m.groupId + ' fehlgeschlagen:', err);
+            }
+        }
+
+        // 2. Nutzer-Dokument (Gruppenzähler)
+        try {
+            await deleteDoc(doc(db, 'users', nutzer.uid));
+        } catch (err) {
+            console.warn('Nutzer-Dokument konnte nicht gelöscht werden:', err);
+        }
+
+        // 3. Firebase-Konto selbst. Reihenfolge ist zwingend: vorher
+        //    brauchen wir die Anmeldung noch für die Schritte oben.
+        meldung('Lösche dein Konto...');
+        await deleteUser(nutzer);
+
+        // 4. Lokale Daten
+        lokaleDatenLoeschen(auchBewertungen);
+
+        meldung('Dein Account wurde gelöscht.');
+        setTimeout(() => window.location.reload(), 1200);
+
+    } catch (err) {
+        if (err.code === 'auth/requires-recent-login') {
+            await erneutAnmeldenUndLoeschen(auchBewertungen);
+        } else {
+            console.error('Löschen fehlgeschlagen:', err);
+            meldung('Löschen fehlgeschlagen: ' + (err.code || err.message), true);
+        }
+    }
+}
+
+// Firebase verlangt für das Löschen eine kürzlich erfolgte Anmeldung.
+// Bei Google lässt sich das direkt nachholen; beim E-Mail-Link geht das
+// nicht ohne neuen Link - dort bleibt nur der Hinweis.
+async function erneutAnmeldenUndLoeschen(auchBewertungen) {
+    const anbieter = (aktuellerNutzer.providerData[0] || {}).providerId;
+
+    if (anbieter === 'google.com') {
+        try {
+            meldung('Zur Sicherheit ist eine erneute Anmeldung nötig...');
+            await reauthenticateWithPopup(aktuellerNutzer, new GoogleAuthProvider());
+            await accountLoeschen(auchBewertungen);
+        } catch (err) {
+            if (err.code === 'auth/popup-closed-by-user') {
+                meldung('Erneute Anmeldung abgebrochen - der Account wurde nicht gelöscht.', true);
+            } else {
+                meldung('Erneute Anmeldung fehlgeschlagen: ' + (err.code || err.message), true);
+            }
+        }
+        return;
+    }
+
+    meldung('Aus Sicherheitsgründen ist eine frische Anmeldung nötig. ' +
+            'Bitte melde dich ab, fordere einen neuen Anmeldelink an und ' +
+            'versuche das Löschen danach erneut.', true);
 }
 
 // ---------------------------------------------------------------------
@@ -1174,14 +1322,357 @@ function abschnittMitgliederverwaltung(gruppe) {
             </div>`;
 }
 
+// --- Konto-Ansichten (Issue #21) ---
+
+function abschnittLogin() {
+    return `
+        <p class="gruppen-hinweis">
+            Ein Login ist <strong>nur</strong> nötig, um Gruppen zu erstellen und zu
+            verwalten. Zum Bewerten der Filme brauchst du keinen Account - die App
+            funktioniert vollständig ohne Anmeldung.
+        </p>
+        <p class="gruppen-hinweis">
+            Zum Erstellen einer Gruppe ist eine Anmeldung nötig. Wer nur beitreten
+            möchte, braucht keine Anmeldung - dafür genügt der Einladungslink.
+        </p>
+        <p class="gruppen-hinweis">
+            Mit einer Gruppe siehst du, wie deine Familie dieselben Filme bewertet hat.
+            Du bewertest weiterhin ganz normal auf den Filmkarten - die Gruppe zeigt
+            zusätzlich die Bewertungen der anderen.
+        </p>
+        <button class="gruppen-btn" data-aktion="google">Mit Google anmelden</button>
+        <div class="gruppen-trenner">oder per E-Mail-Link ohne Passwort</div>
+        <div class="gruppen-zeile">
+            <input type="email" id="anmelde-email" placeholder="deine@email.de" autocomplete="email">
+            <button class="gruppen-btn schmal" data-aktion="maillink">Link senden</button>
+        </div>
+        <p class="gruppen-hinweis ds-verweis">
+            Bevor du dich anmeldest:
+            <button class="gruppen-link-btn" data-aktion="datenschutz">Welche Daten werden gespeichert?</button>
+        </p>`;
+}
+
+function abschnittProfil() {
+    const uebersicht = meineGruppenUebersicht();
+
+    const gruppenListe = uebersicht.length === 0
+        ? '<p class="gruppen-hinweis">Du bist derzeit in keiner Gruppe.</p>'
+        : uebersicht.map(g => `
+            <div class="mitglied-zeile">
+                <div class="mitglied-kopf">
+                    <span class="mitglied-name">${sicher(g.name)}</span>
+                    <span class="gruppen-status">${g.rolle === 'admin' ? 'Admin' : 'Mitglied'}</span>
+                    ${g.gesperrt ? '<span class="gruppen-status">gesperrt</span>' : ''}
+                </div>
+                <button class="gruppen-btn schmal grau" data-aktion="zur-gruppe" data-gid="${sicher(g.groupId)}">
+                    Zur Gruppenverwaltung
+                </button>
+            </div>`).join('');
+
+    return `
+        <div class="gruppen-block">
+            <div class="gruppen-konto">
+                Angemeldet als <strong>${sicher(aktuellerNutzer.email || 'unbekannt')}</strong>
+            </div>
+            <button class="gruppen-btn grau" data-aktion="abmelden">Abmelden</button>
+        </div>
+
+        <div class="gruppen-block">
+            <div class="gruppen-untertitel">Meine Gruppen</div>
+            ${gruppenListe}
+        </div>
+
+        <div class="gruppen-block">
+            <div class="gruppen-untertitel">Account löschen</div>
+            <p class="gruppen-hinweis">
+                Entfernt dein Konto und deine Gruppenmitgliedschaften dauerhaft.
+            </p>
+            <button class="gruppen-btn gefahr" data-aktion="loeschen-start">Account löschen</button>
+        </div>`;
+}
+
+function abschnittLoeschenHinweis() {
+    return `
+        <p class="gruppen-hinweis">
+            Eine Löschung des Accounts ist möglich, wenn du deine Adminrechte deiner
+            Gruppen weitergegeben hast oder die Gruppe(n), in der du Admin bist,
+            gelöscht hast. Bei Gruppen, in denen du nur Mitglied bist, wirst du
+            automatisch aus den Gruppen entfernt.
+        </p>
+        <p class="gruppen-hinweis"><strong>Möchtest du deinen Account löschen?</strong></p>
+        <button class="gruppen-btn gefahr" data-aktion="loeschen-weiter">Bitte Account löschen.</button>
+        <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Nein</button>`;
+}
+
+function abschnittLoeschenAdmin() {
+    const namen = meineGruppen.map(g => sicher(g.name)).join(', ');
+    return `
+        <div class="gruppen-warnung">
+            Eine Löschung des Accounts ist nur möglich, wenn du deine Adminrechte
+            deiner Gruppen weitergegeben hast oder die Gruppe(n), in der du Admin
+            bist, gelöscht hast.
+        </div>
+        <p class="gruppen-hinweis">Du verwaltest derzeit: <strong>${namen}</strong></p>
+        <button class="gruppen-btn" data-aktion="zur-verwaltung">Zur Gruppenverwaltung</button>
+        <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Account nicht löschen</button>`;
+}
+
+function abschnittLoeschenFinal() {
+    const anzahl = Object.keys(lokaleBewertungen()).length;
+    return `
+        <div class="gruppen-warnung">
+            Möchtest du deinen Account wirklich löschen? Alle Bewertungen und
+            Gruppenmitgliedschaften werden gelöscht und können nicht reaktiviert
+            werden.
+        </div>
+        ${anzahl > 0 ? `
+        <label class="gruppen-check">
+            <input type="checkbox" id="loeschen-bewertungen" checked>
+            Auch meine ${anzahl} Bewertung(en) auf diesem Gerät löschen
+        </label>
+        <p class="gruppen-hinweis">
+            Ohne Haken bleiben deine Bewertungen lokal erhalten - du kannst die App
+            danach ohne Account weiternutzen.
+        </p>` : ''}
+        <button class="gruppen-btn gefahr" data-aktion="loeschen-endgueltig">Ja! Account löschen.</button>
+        <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Abbrechen</button>`;
+}
+
+// --- Infos zum Fan Guide (Issue #24) ---
+// Enthält die von TMDB vorgeschriebene Attribution. Die Vorgabe verlangt
+// einen Bereich vom Typ "About"/"Credits", den wörtlichen englischen
+// Hinweis sowie das unveränderte Logo, weniger prominent als das eigene.
+
+function abschnittInfos() {
+    return `
+        <div class="ds-block">
+            <div class="ds-titel">Was ist das hier?</div>
+            <p>Eine private Übersicht der Filme des Marvel Cinematic Universe und
+               einiger wichtiger Zusatzfilme - sortiert in einer selbst
+               zusammengestellten Reihenfolge, die sich für gemeinsame Filmabende
+               bewährt hat.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was kannst du damit machen?</div>
+            <ul>
+                <li>Filme mit Popcorn-Tüten bewerten (0 bis 5)</li>
+                <li>Den eigenen Fortschritt verfolgen - bewertete Filme gelten als gesehen</li>
+                <li>Optional eine Gruppe anlegen und sehen, wie andere dieselben Filme
+                    bewertet haben</li>
+            </ul>
+            <p>Zum Bewerten ist keine Anmeldung nötig. Die Bewertungen bleiben dann
+               ausschließlich auf deinem Gerät.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wer steckt dahinter?</div>
+            <p>Ein privates, nicht-kommerzielles Projekt von KrizzMe. Der Quellcode ist
+               öffentlich einsehbar unter
+               <a href="https://github.com/KrizzMe/mcu-guide" target="_blank" rel="noopener noreferrer">github.com/KrizzMe/mcu-guide</a>.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Filmdaten und Poster</div>
+            <p>Filmdaten und Poster stammen von The Movie Database (TMDB). Die Rechte an
+               den Postern liegen bei den jeweiligen Filmstudios. Diese Seite steht in
+               keiner Verbindung zu Marvel, Disney oder anderen Rechteinhabern.</p>
+
+            <div class="tmdb-attribution">
+                <div class="tmdb-untertitel">Hinweis zur Datenquelle</div>
+                <img src="tmdb-logo.svg" alt="The Movie Database (TMDB)" class="tmdb-logo"
+                     onerror="this.style.display='none'">
+                <p class="tmdb-notice">
+                    This product uses the TMDB API but is not endorsed or certified by TMDB.
+                </p>
+                <p class="tmdb-erklaerung">
+                    (Dieser englische Hinweis ist von TMDB vorgegeben und muss so
+                    ausgewiesen sein.)
+                </p>
+                <p class="tmdb-erklaerung">
+                    <strong>Übersetzung:</strong> Diese Anwendung nutzt die
+                    TMDB-Schnittstelle, wird von TMDB aber weder unterstützt noch
+                    zertifiziert.
+                </p>
+            </div>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Datenschutz</div>
+            <p>Welche Daten gespeichert werden und wofür, steht in den
+               <button class="gruppen-link-btn" data-aktion="datenschutz">Datenschutzhinweisen</button>.</p>
+        </div>
+
+        <button class="gruppen-btn grau" data-aktion="infos-zurueck">Zurück</button>`;
+}
+
+// --- Datenschutzhinweise (Issue #22) ---
+
+function abschnittDatenschutz() {
+    return `
+        <p class="gruppen-hinweis">
+            Diese Seite ist ein privates, nicht-kommerzielles Projekt. Die folgenden
+            Hinweise sollen offenlegen, was technisch passiert - nicht nur formale
+            Pflichten erfüllen.
+        </p>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wer ist verantwortlich?</div>
+            <p>Betrieben wird die Seite privat von KrizzMe.</p>
+            <p>Kontakt: <a href="mailto:krizzme.projects@gmail.com">krizzme.projects@gmail.com</a></p>
+            <p>Der Quellcode ist öffentlich einsehbar unter
+               <a href="https://github.com/KrizzMe/mcu-guide" target="_blank" rel="noopener noreferrer">github.com/KrizzMe/mcu-guide</a>.
+               Dort lässt sich nachvollziehen, was die App tatsächlich tut.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Ohne Anmeldung: nichts verlässt dein Gerät</div>
+            <p>Wer nur Filme bewerten möchte, braucht keinen Account. Bewertungen
+               werden dann ausschließlich lokal auf deinem Gerät gespeichert und
+               nirgendwohin übertragen.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Welche Daten fallen bei der Anmeldung an?</div>
+            <ul>
+                <li>Deine E-Mail-Adresse</li>
+                <li>Eine technische Kennung deines Kontos</li>
+            </ul>
+            <p>Diese Daten stammen von Google beziehungsweise aus dem Versand des
+               Anmeldelinks.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Welche Daten werden in einer Gruppe geteilt?</div>
+            <ul>
+                <li>Dein selbst gewählter Anzeigename</li>
+                <li>Deine Filmbewertungen</li>
+                <li>Der Zeitpunkt der letzten Änderung</li>
+            </ul>
+            <p>Sichtbar sind diese Angaben ausschließlich für die anderen Mitglieder
+               derselben Gruppe.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wofür wird die Anmeldung überhaupt gebraucht?</div>
+            <p>Ausschließlich für die Gruppenfunktion. Sie sorgt dafür, dass du nach
+               einem Gerätewechsel wieder Zugriff auf deine Gruppen bekommst - ohne
+               eine dauerhafte Kennung wäre das technisch nicht möglich.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was wird auf deinem Gerät gespeichert?</div>
+            <ul>
+                <li>Bewertungen, Gruppenmitgliedschaften und die zuletzt gewählte
+                    Gruppe im lokalen Speicher deines Geräts</li>
+                <li>Technische Angaben zum Angemeldet-Bleiben (durch Firebase)</li>
+            </ul>
+            <p>Das gilt gleichermaßen, ob du die Seite im Browser öffnest oder über
+               das Symbol auf dem Startbildschirm - technisch ist es derselbe
+               Speicher. Es werden keine eigenen Cookies gesetzt und es findet keine
+               Wiedererkennung über Websites hinweg statt. Alles Gespeicherte ist für
+               die Funktionen erforderlich, die du selbst nutzt - deshalb gibt es hier
+               auch kein Einwilligungsbanner. Beim Anmelden über Google öffnet sich ein
+               Fenster von Google; was dort gespeichert wird, unterliegt Googles
+               eigener Datenschutzerklärung.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wo liegen die Daten?</div>
+            <ul>
+                <li>Firebase (Google), Datenbankstandort Frankfurt am Main</li>
+                <li>Hosting über GitHub Pages, dort fallen serverseitig Zugriffsdaten an</li>
+                <li>Die technischen Bausteine der Anmeldung werden bei jedem
+                    Seitenaufruf von einem Google-Server geladen; dabei wird deine
+                    IP-Adresse an Google übertragen</li>
+            </ul>
+            <p>Beide Anbieter verarbeiten die Daten ausschließlich als technische
+               Dienstleister im Auftrag.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Was ausdrücklich nicht passiert</div>
+            <ul>
+                <li>Keine Weitergabe an Dritte zu deren eigenen Zwecken</li>
+                <li>Kein Verkauf von Daten</li>
+                <li>Keine Werbung, keine Profilbildung</li>
+                <li>Keine Analyse- oder Trackingdienste - Google Analytics wurde im
+                    Firebase-Projekt bewusst deaktiviert</li>
+            </ul>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Wie wirst du deine Daten wieder los?</div>
+            <p>Jederzeit selbst über <strong>Mein Profil → Account löschen</strong>.
+               Dabei werden Konto, Gruppenmitgliedschaften und geteilte Bewertungen
+               entfernt; die lokalen Bewertungen auf Wunsch ebenfalls. Alternativ
+               lassen sich die lokalen Daten über die Browser-Einstellungen löschen.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Links zu externen Seiten</div>
+            <p>Auf den Filmkarten findest du Verweise zu IMDb und TMDB. Beim Anklicken
+               verlässt du diese Seite; ab dann gelten die Datenschutzbestimmungen des
+               jeweiligen Anbieters.</p>
+            <p>Für die Inhalte externer Seiten übernehme ich keine Haftung. Zum
+               Zeitpunkt der Verlinkung waren keine rechtswidrigen Inhalte erkennbar.
+               Sollte mir eine Rechtsverletzung bekannt werden, entferne ich den
+               entsprechenden Verweis umgehend.</p>
+        </div>
+
+        <div class="ds-block">
+            <div class="ds-titel">Deine Rechte</div>
+            <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und Widerspruch
+               sowie das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu
+               beschweren.</p>
+        </div>
+
+        <button class="gruppen-btn grau" data-aktion="datenschutz-zurueck">Zurück</button>`;
+}
+
 function zeichneFenster() {
     const inhalt = document.getElementById('gruppen-inhalt');
+    const titelEl = document.getElementById('gruppen-titel');
     if (!inhalt) return;
 
     if (ladeVorgang) {
         inhalt.innerHTML = '<p class="gruppen-hinweis">Einen Moment...</p>';
         return;
     }
+
+    if (ansicht === 'infos') {
+        if (titelEl) titelEl.textContent = 'Infos zum Fan Guide';
+        inhalt.innerHTML = abschnittInfos();
+        return;
+    }
+
+    if (ansicht === 'datenschutz') {
+        if (titelEl) titelEl.textContent = 'Datenschutzhinweise';
+        inhalt.innerHTML = abschnittDatenschutz();
+        return;
+    }
+
+    // Wer sich abmeldet, während eine Konto-Ansicht offen ist, landet
+    // wieder auf der Anmeldung statt in einer leeren Maske.
+    if (ansicht !== 'gruppen' && !istEchtAngemeldet()) {
+        ansicht = 'konto';
+    }
+
+    if (ansicht === 'konto') {
+        if (titelEl) titelEl.textContent = istEchtAngemeldet() ? 'Mein Profil' : 'Login';
+        inhalt.innerHTML = istEchtAngemeldet() ? abschnittProfil() : abschnittLogin();
+        return;
+    }
+
+    if (ansicht.startsWith('loeschen')) {
+        if (titelEl) titelEl.textContent = 'Account löschen';
+        if (ansicht === 'loeschen-admin')  inhalt.innerHTML = abschnittLoeschenAdmin();
+        else if (ansicht === 'loeschen-final') inhalt.innerHTML = abschnittLoeschenFinal();
+        else inhalt.innerHTML = abschnittLoeschenHinweis();
+        return;
+    }
+
+    if (titelEl) titelEl.textContent = 'Gruppen';
 
     const einleitung = (mitgliedschaftenLesen().length === 0 && !einladung)
         ? `<p class="gruppen-hinweis">
@@ -1193,9 +1684,11 @@ function zeichneFenster() {
     inhalt.innerHTML = einleitung + abschnittEinladung() + abschnittMeineGruppen() + abschnittAdmin();
 }
 
-function oeffneGruppenFenster() {
+function fensterOeffnen(gewuenschteAnsicht) {
     const fenster = document.getElementById('gruppen-fenster');
     if (!fenster) return;
+    ansicht = gewuenschteAnsicht;
+    meldungLeeren();
     fenster.classList.add('offen');
     zeichneFenster();
     if (istEchtAngemeldet() && meineGruppen.length === 0) {
@@ -1203,9 +1696,19 @@ function oeffneGruppenFenster() {
     }
 }
 
+function oeffneGruppenFenster() {
+    fensterOeffnen('gruppen');
+}
+
+function oeffneKontoFenster() {
+    fensterOeffnen('konto');
+}
+
 function schliesseGruppenFenster() {
     const fenster = document.getElementById('gruppen-fenster');
     if (fenster) fenster.classList.remove('offen');
+    // Ein erneutes Öffnen soll nicht mitten im Löschablauf landen.
+    if (ansicht.startsWith('loeschen')) ansicht = 'konto';
 }
 
 // Ein einziger Klick-Handler für das ganze Fenster - robuster als viele
@@ -1238,6 +1741,33 @@ function fensterKlicks(event) {
     if (aktion === 'gruppe-loeschen')     gruppeLoeschen(gid, name);
     if (aktion === 'wiedereinstieg') {
         wiedereinstiegEinloesen(document.getElementById('beitritt-name')?.value || '');
+    }
+
+    // Kontoverwaltung (Issue #21)
+    if (aktion === 'zur-gruppe')          zurGruppenverwaltung(gid);
+    if (aktion === 'zur-verwaltung')      { ansicht = 'gruppen'; zeichneFenster(); }
+    if (aktion === 'loeschen-start')      { ansicht = 'loeschen-hinweis'; meldungLeeren(); zeichneFenster(); }
+    if (aktion === 'loeschen-weiter')     loeschenFortsetzen();
+    if (aktion === 'loeschen-abbrechen')  { ansicht = 'konto'; meldungLeeren(); zeichneFenster(); }
+    if (aktion === 'loeschen-endgueltig') {
+        accountLoeschen(document.getElementById('loeschen-bewertungen')?.checked !== false);
+    }
+
+    if (aktion === 'infos-zurueck') {
+        ansicht = vorherigeAnsicht || 'konto';
+        zeichneFenster();
+    }
+
+    // Datenschutzhinweise (Issue #22)
+    if (aktion === 'datenschutz') {
+        vorherigeAnsicht = ansicht;
+        ansicht = 'datenschutz';
+        meldungLeeren();
+        zeichneFenster();
+    }
+    if (aktion === 'datenschutz-zurueck') {
+        ansicht = vorherigeAnsicht || 'konto';
+        zeichneFenster();
     }
 
     if (aktion === 'abgleichen') {
@@ -1293,6 +1823,7 @@ document.addEventListener('keydown', event => {
 
 onAuthStateChanged(auth, async nutzer => {
     aktuellerNutzer = nutzer;
+    navBeschriftungAktualisieren();
     if (istEchtAngemeldet()) {
         ladeVorgang = true;
         zeichneFenster();
@@ -1318,8 +1849,18 @@ window.addEventListener('online', () => {
 });
 
 // Für andere Dateien erreichbar machen
-window.openGroupPanel   = oeffneGruppenFenster;
-window.closeGroupPanel  = schliesseGruppenFenster;
+window.openGroupPanel       = oeffneGruppenFenster;
+window.openKontoPanel       = oeffneKontoFenster;
+window.openDatenschutz      = () => {
+    vorherigeAnsicht = 'konto';
+    fensterOeffnen('datenschutz');
+};
+window.openInfos            = () => {
+    vorherigeAnsicht = 'konto';
+    fensterOeffnen('infos');
+};
+window.closeGroupPanel      = schliesseGruppenFenster;
+window.getKontoLabel        = () => (istEchtAngemeldet() ? 'Mein Profil' : 'Login');
 window.getAktiveGruppe      = aktiveGruppeId;
 window.getAktiveGruppeName  = aktiveGruppeName;
 window.onRatingChanged      = bewertungHochladen;

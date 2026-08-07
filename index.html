@@ -16,11 +16,25 @@
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
-	<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
 	<link rel="manifest" href="manifest.json">
 	<link rel="icon" type="image/png" sizes="32x32" href="fav32.png">
 	<link rel="apple-touch-icon" href="m.png">
     <style>
+        /* Schriftart lokal eingebunden statt von Google Fonts geladen.
+           Beim externen Laden würde die IP-Adresse jedes Besuchers an
+           Google übertragen, noch bevor er irgendetwas anklickt.
+           Bangers steht unter der Open Font License, lokales Hosten ist
+           ausdrücklich erlaubt. */
+        @font-face {
+            font-family: 'Bangers';
+            font-style: normal;
+            font-weight: 400;
+            /* swap: Text bleibt sofort lesbar, auch bevor die Schrift
+               geladen ist - dann eben kurz in der Ersatzschrift. */
+            font-display: swap;
+            src: url('fonts/bangers.woff2') format('woff2');
+        }
+
         :root {
             --bg-color: #121212;
             --card-bg: rgba(30, 30, 30, 0.85);
@@ -199,12 +213,14 @@
             margin: 0 4px;
         }
 
-        .quick-nav a.nav-groups { white-space: nowrap; }
+        .quick-nav a.nav-groups,
+        .quick-nav a.nav-konto { white-space: nowrap; }
 
         /* Icon grau statt bunt - gleicher Look wie eine nicht bewertete
            (inaktive) Popcorn-Tüte, siehe .popcorn weiter unten */
         .nav-home-icon,
-        .nav-groups-icon {
+        .nav-groups-icon,
+        .nav-konto-icon {
             filter: grayscale(1) opacity(0.35);
         }
 
@@ -733,6 +749,102 @@
             color: var(--text-muted);
         }
 
+        /* TMDB-Attribution. Das Logo muss unverändert bleiben (Farbe,
+           Seitenverhältnis, nicht gespiegelt oder gedreht) und weniger
+           prominent sein als das eigene Logo - deshalb bewusst klein. */
+        .tmdb-attribution {
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+
+        .tmdb-untertitel {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        .tmdb-logo {
+            height: 26px;
+            width: auto;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .tmdb-notice {
+            font-size: 0.85rem !important;
+            color: var(--text-color) !important;
+            margin-bottom: 6px !important;
+        }
+
+        .tmdb-erklaerung {
+            font-size: 0.8rem !important;
+            color: var(--text-muted) !important;
+            margin-bottom: 6px !important;
+        }
+
+        /* --- Datenschutzhinweise (Issue #22) --- */
+        .ds-block {
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .ds-block:last-of-type { border-bottom: none; }
+
+        .ds-titel {
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+            color: var(--text-color);
+        }
+
+        .ds-block p,
+        .ds-block ul {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin: 0 0 8px;
+        }
+
+        .ds-block ul { padding-left: 20px; }
+        .ds-block li { margin-bottom: 4px; }
+        .ds-block a { color: var(--text-color); }
+
+        .ds-verweis { margin-top: 16px; }
+
+        /* Link in der Fußzeile - sieht aus wie Text, ist aber ein Knopf,
+           damit kein Sprung in der Adresszeile entsteht. */
+        .footer-link {
+            background: none;
+            border: none;
+            padding: 0;
+            color: var(--text-muted);
+            font-size: inherit;
+            font-family: inherit;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .footer-link:hover { color: var(--text-color); }
+
+        .footer-trenner { margin: 0 6px; opacity: 0.6; }
+
+        /* Hervorgehobener Warnhinweis im Löschablauf */
+        .gruppen-warnung {
+            background: rgba(211,47,47,0.15);
+            border: 1px solid #d32f2f;
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            color: #ef9a9a;
+        }
+
         .gruppen-btn.gefahr {
             background: rgba(211,47,47,0.15);
             border: 1px solid #d32f2f;
@@ -1089,7 +1201,12 @@
 
     <!-- Fixierter Footer unten -->
     <footer>
-        <p>(c) Marvel - Cinematic Experience  Fan Guide by .Kriz - 2026</p>
+        <p>(c) Marvel - Cinematic Experience  Fan Guide by KrizzMe - 2026
+           <span class="footer-trenner">·</span>
+           <button class="footer-link" onclick="window.openInfos && window.openInfos()">Infos zum Fan Guide</button>
+           <span class="footer-trenner">·</span>
+           <button class="footer-link" onclick="window.openDatenschutz && window.openDatenschutz()">Datenschutzhinweise</button>
+        </p>
     </footer>
 
     <!-- Overlay-Container -->
@@ -1103,7 +1220,7 @@
     <div id="gruppen-fenster">
         <div class="gruppen-box" role="dialog" aria-label="Gruppenverwaltung">
             <div class="gruppen-kopf">
-                <span>Gruppen</span>
+                <span id="gruppen-titel">Gruppen</span>
                 <button class="gruppen-schliessen" data-aktion="schliessen" aria-label="Schließen">✕</button>
             </div>
             <div id="gruppen-meldung" class="gruppen-meldung"></div>
