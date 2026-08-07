@@ -15,12 +15,66 @@ function openOverlay(cardElement) {
     const overlay = document.getElementById('poster-overlay');
     const overlayImg = document.getElementById('overlay-img');
     overlayImg.src = imgElement.src;
+    overlayImg.style.display = ''; // Poster sichtbar - Standardfall beim Antippen der Karte
     overlay.style.display = 'flex';
+
+    const trailerBereich = document.getElementById('trailer-bereich');
+    if (trailerBereich) trailerBereich.innerHTML = '';
+}
+
+// Wird vom "🎬 Trailer"-Button auf der Filmkarte aufgerufen: zeigt NUR
+// den Trailer, kein Poster daneben - dafür wird dasselbe Overlay
+// genutzt (Hintergrund, Schließen-Button), nur das Poster-Bild bleibt
+// versteckt.
+function trailerVonKarteOeffnen(buttonElement, event) {
+    event.stopPropagation(); // verhindert, dass die Karte zusätzlich ihr eigenes openOverlay auslöst
+
+    const overlay = document.getElementById('poster-overlay');
+    const overlayImg = document.getElementById('overlay-img');
+    overlayImg.style.display = 'none';
+    overlay.style.display = 'flex';
+
+    const tmdbId = buttonElement.dataset.tmdbId;
+    if (tmdbId) trailerAnzeigen(tmdbId, event);
+}
+
+// Lädt den Trailer nach und ersetzt den Inhalt des Trailer-Bereichs durch
+// den YouTube-Player (datenschutzfreundliche Adresse youtube-nocookie.com).
+async function trailerAnzeigen(tmdbId, event) {
+    event.stopPropagation();
+    const bereich = document.getElementById('trailer-bereich');
+    bereich.innerHTML = '<p class="trailer-status">Lade Trailer...</p>';
+
+    const trailer = await trailerLaden(tmdbId);
+
+    if (!trailer) {
+        bereich.innerHTML = '<p class="trailer-status">Kein Trailer gefunden.</p>';
+        return;
+    }
+
+    bereich.innerHTML = `
+        <div class="trailer-player">
+            <iframe
+                src="https://www.youtube-nocookie.com/embed/${trailer.key}?rel=0"
+                title="Trailer"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+            </iframe>
+        </div>`;
 }
 
 function closeOverlay() {
     const overlay = document.getElementById('poster-overlay');
     overlay.style.display = 'none';
+    // Player aus dem DOM entfernen, statt nur zu verstecken - sonst
+    // würde ein laufender Trailer im Hintergrund weiterspielen.
+    const trailerBereich = document.getElementById('trailer-bereich');
+    if (trailerBereich) trailerBereich.innerHTML = '';
+    // Sichtbarkeit zurücksetzen, damit ein Klick auf die Karte beim
+    // nächsten Mal garantiert wieder das Poster zeigt, unabhängig davon,
+    // wie das Overlay zuletzt geöffnet wurde.
+    const overlayImg = document.getElementById('overlay-img');
+    if (overlayImg) overlayImg.style.display = '';
 }
 
 // ESC schließt Poster-Overlay bzw. Navigations-Drawer
@@ -47,6 +101,41 @@ function closeSidebar() {
     if (sidebar.classList.contains('open')) {
         toggleSidebar();
     }
+}
+
+// --- Automatisches Vollbild beim Drehen ins Querformat (Trailer) ---
+// Nur wirksam, solange der Trailer-Player offen ist. Manche Browser
+// (v. a. Chrome/Android) erlauben requestFullscreen() ausdrücklich bei
+// einer Ausrichtungsänderung, auch ohne direkte Berührung in diesem
+// Moment. iOS Safari zieht hier deutlich enger - dort klappt es
+// möglicherweise nicht zuverlässig. Schlägt es fehl, bleibt der
+// reguläre Vollbild-Knopf im YouTube-Player selbst als Rückfalloption
+// erhalten, es passiert einfach nichts weiter.
+function aktivenTrailerIframe() {
+    const bereich = document.getElementById('trailer-bereich');
+    return bereich ? bereich.querySelector('iframe') : null;
+}
+
+function orientierungGeaendert() {
+    const iframe = aktivenTrailerIframe();
+    if (!iframe) return; // kein Trailer offen - nichts zu tun
+
+    const istQuer = window.matchMedia('(orientation: landscape)').matches;
+
+    if (istQuer && !document.fullscreenElement) {
+        iframe.requestFullscreen().catch(() => {
+            // Wird u. a. auf iOS Safari abgelehnt - dann bleibt der
+            // Vollbild-Knopf im Player selbst die Alternative.
+        });
+    } else if (!istQuer && document.fullscreenElement === iframe) {
+        document.exitFullscreen().catch(() => {});
+    }
+}
+
+if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', orientierungGeaendert);
+} else {
+    window.addEventListener('orientationchange', orientierungGeaendert);
 }
 
 // Touch-Gestenerkennung für Wischfunktion (Swipe)
