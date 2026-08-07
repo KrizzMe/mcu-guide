@@ -103,41 +103,6 @@ function closeSidebar() {
     }
 }
 
-// --- Automatisches Vollbild beim Drehen ins Querformat (Trailer) ---
-// Nur wirksam, solange der Trailer-Player offen ist. Manche Browser
-// (v. a. Chrome/Android) erlauben requestFullscreen() ausdrücklich bei
-// einer Ausrichtungsänderung, auch ohne direkte Berührung in diesem
-// Moment. iOS Safari zieht hier deutlich enger - dort klappt es
-// möglicherweise nicht zuverlässig. Schlägt es fehl, bleibt der
-// reguläre Vollbild-Knopf im YouTube-Player selbst als Rückfalloption
-// erhalten, es passiert einfach nichts weiter.
-function aktivenTrailerIframe() {
-    const bereich = document.getElementById('trailer-bereich');
-    return bereich ? bereich.querySelector('iframe') : null;
-}
-
-function orientierungGeaendert() {
-    const iframe = aktivenTrailerIframe();
-    if (!iframe) return; // kein Trailer offen - nichts zu tun
-
-    const istQuer = window.matchMedia('(orientation: landscape)').matches;
-
-    if (istQuer && !document.fullscreenElement) {
-        iframe.requestFullscreen().catch(() => {
-            // Wird u. a. auf iOS Safari abgelehnt - dann bleibt der
-            // Vollbild-Knopf im Player selbst die Alternative.
-        });
-    } else if (!istQuer && document.fullscreenElement === iframe) {
-        document.exitFullscreen().catch(() => {});
-    }
-}
-
-if (screen.orientation && screen.orientation.addEventListener) {
-    screen.orientation.addEventListener('change', orientierungGeaendert);
-} else {
-    window.addEventListener('orientationchange', orientierungGeaendert);
-}
-
 // Touch-Gestenerkennung für Wischfunktion (Swipe)
 let touchStartX = 0;
 let touchEndX = 0;
@@ -164,4 +129,3 @@ function handleSwipe() {
         toggleSidebar();
     }
 }
-
