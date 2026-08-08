@@ -1442,6 +1442,12 @@ function abschnittLoeschenFinal() {
 // Die eigentliche Lade-/Wechsel-Logik lebt in app.js (listeWechseln,
 // VERFUEGBARE_LISTEN) - hier nur die Anzeige im gewohnten Fenster.
 
+// --- Eigene Listen anlegen/umbenennen/löschen (Relaunch Stufe 2) ---
+// Datenhaltung (localStorage, Namensprüfung, Limits) lebt komplett in
+// app.js - hier nur Formulare und Bestätigungen. ID der Liste, die
+// gerade umbenannt wird (Inline-Formular), oder null.
+let eigeneListeBearbeitungId = null;
+
 function abschnittListen() {
     const listen = typeof window.getVerfuegbareListen === 'function'
         ? window.getVerfuegbareListen()
@@ -1454,16 +1460,61 @@ function abschnittListen() {
         return '<p class="gruppen-hinweis">Keine Filmreihen verfügbar.</p>';
     }
 
-    const eintraege = listen.map(l => `
+    const eintraege = listen.map(l => {
+        if (eigeneListeBearbeitungId === l.id) {
+            return `
+        <div class="mitglied-zeile">
+            <div class="gruppen-zeile">
+                <input type="text" id="eigene-liste-kurzname-${l.id}" value="${sicher(l.kurzname)}" placeholder="Kurzname (max. 15 Zeichen)" maxlength="15">
+            </div>
+            <div class="gruppen-zeile">
+                <input type="text" id="eigene-liste-name-${l.id}" value="${sicher(l.name)}" placeholder="Langname (max. 40 Zeichen)" maxlength="40">
+            </div>
+            <div class="gruppen-aktionen">
+                <button class="gruppen-btn schmal" data-aktion="eigene-liste-umbenennen-speichern" data-liste-id="${l.id}">Speichern</button>
+                <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-umbenennen-abbrechen">Abbrechen</button>
+            </div>
+        </div>`;
+        }
+
+        const eigeneAktionen = l.eigene ? `
+                <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-umbenennen-start" data-liste-id="${l.id}">Umbenennen</button>
+                <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-loeschen" data-liste-id="${l.id}" data-name="${sicher(l.name)}">Löschen</button>` : '';
+
+        return `
         <div class="mitglied-zeile">
             <div class="mitglied-kopf">
                 <span class="mitglied-name">${sicher(l.name)}</span>
                 ${l.id === aktiveId ? '<span class="gruppen-status">aktiv</span>' : ''}
+                ${l.eigene ? `<span class="mitglied-anzahl">${l.anzahlFilme} Film(e)</span>` : ''}
             </div>
-            ${l.id === aktiveId
-                ? ''
-                : `<button class="gruppen-btn schmal" data-aktion="liste-wechseln" data-liste-id="${sicher(l.id)}">Auswählen</button>`}
-        </div>`).join('');
+            <div class="gruppen-aktionen">
+                ${l.id === aktiveId
+                    ? ''
+                    : `<button class="gruppen-btn schmal" data-aktion="liste-wechseln" data-liste-id="${sicher(l.id)}">Auswählen</button>`}
+                ${eigeneAktionen}
+            </div>
+        </div>`;
+    }).join('');
+
+    const anzahlEigene = typeof window.getEigeneListenAnzahl === 'function' ? window.getEigeneListenAnzahl() : 0;
+    const maxEigene = typeof window.getEigeneListenMax === 'function' ? window.getEigeneListenMax() : 3;
+
+    const anlegenBereich = anzahlEigene >= maxEigene ? `
+        <p class="gruppen-hinweis">
+            Du hast bereits ${maxEigene} eigene Listen angelegt - mehr geht aktuell
+            nur mit einem Konto (kommt in einer späteren Ausbaustufe).
+        </p>` : `
+        <div class="gruppen-anlegen">
+            <div class="gruppen-untertitel">Eigene Liste anlegen</div>
+            <div class="gruppen-zeile">
+                <input type="text" id="neue-liste-kurzname" placeholder="Kurzname für die Navigation, z. B. Favoriten" maxlength="15">
+            </div>
+            <div class="gruppen-zeile">
+                <input type="text" id="neue-liste-name" placeholder="Langname, z. B. Meine Lieblingsfilme" maxlength="40">
+            </div>
+            <button class="gruppen-btn" data-aktion="eigene-liste-anlegen">Liste anlegen</button>
+        </div>`;
 
     return `
         <p class="gruppen-hinweis">
@@ -1471,7 +1522,8 @@ function abschnittListen() {
             beim Wechseln erhalten - sie sind pro Film gespeichert, unabhängig
             davon, welche Liste gerade aktiv ist.
         </p>
-        ${eintraege}`;
+        ${eintraege}
+        ${anlegenBereich}`;
 }
 
 // --- Infos zum Fan Guide (Issue #24) ---
@@ -1809,6 +1861,53 @@ function fensterKlicks(event) {
         if (typeof window.listeWechseln === 'function' && listeId) {
             window.listeWechseln(listeId).then(() => zeichneFenster());
         }
+    }
+
+    // Eigene Listen (Relaunch Stufe 2)
+    if (aktion === 'eigene-liste-anlegen') {
+        const kurzname = document.getElementById('neue-liste-kurzname')?.value || '';
+        const name = document.getElementById('neue-liste-name')?.value || '';
+        const ergebnis = window.eigeneListeAnlegen(kurzname, name);
+        if (!ergebnis.ok) {
+            meldung(ergebnis.fehler, true);
+        } else {
+            meldungLeeren();
+            zeichneFenster();
+        }
+    }
+    if (aktion === 'eigene-liste-umbenennen-start') {
+        eigeneListeBearbeitungId = ziel.dataset.listeId;
+        meldungLeeren();
+        zeichneFenster();
+    }
+    if (aktion === 'eigene-liste-umbenennen-abbrechen') {
+        eigeneListeBearbeitungId = null;
+        zeichneFenster();
+    }
+    if (aktion === 'eigene-liste-umbenennen-speichern') {
+        const bearbeiteteId = ziel.dataset.listeId;
+        const kurzname = document.getElementById('eigene-liste-kurzname-' + bearbeiteteId)?.value || '';
+        const name = document.getElementById('eigene-liste-name-' + bearbeiteteId)?.value || '';
+        const ergebnis = window.eigeneListeUmbenennen(bearbeiteteId, kurzname, name);
+        if (!ergebnis.ok) {
+            meldung(ergebnis.fehler, true);
+        } else {
+            eigeneListeBearbeitungId = null;
+            meldungLeeren();
+            zeichneFenster();
+        }
+    }
+    if (aktion === 'eigene-liste-loeschen') {
+        const listeId = ziel.dataset.listeId;
+        const listenName = ziel.dataset.name;
+        const bestaetigt = window.confirm(
+            'Liste "' + listenName + '" wirklich löschen?\n\n' +
+            'Die Filme werden aus dieser Liste entfernt. Bereits abgegebene ' +
+            'Bewertungen bleiben erhalten, falls die Filme auch in anderen ' +
+            'Listen vorkommen.'
+        );
+        if (!bestaetigt) return;
+        window.eigeneListeLoeschen(listeId).then(zeichneFenster);
     }
 
     // Datenschutzhinweise (Issue #22)

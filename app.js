@@ -74,7 +74,10 @@ function renderNav() {
     const groupLink = `<a href="#" class="nav-groups" data-nav-groups title="Gruppen verwalten"><span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}</a>`;
     // Auf Desktop senkrechter Strich, auf Mobil waagerechte Linie (siehe CSS)
     const trenner = `<span class="nav-trenner" aria-hidden="true"></span>`;
-    const links = MOVIE_DATA.map((section, i) =>
+    // Eigene Listen bestehen aus genau einer Sektion mit der technischen
+    // ID "inhalt" (siehe ladeUndRendereAktiveListe) - die braucht keinen
+    // eigenen Unterpunkt, der Listeneintrag selbst genügt als Anker.
+    const links = MOVIE_DATA.filter(section => section.id !== 'inhalt').map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
     nav.innerHTML = closeButton + homeLink + listenLink + trenner + kontoLink + groupLink + trenner + links;
@@ -139,9 +142,20 @@ function updateNavLabels() {
 
 window.onAktiveGruppeGeaendert = updateNavLabels;
 window.onKontoStatusGeaendert = updateNavLabels;
-window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({ id: l.id, name: l.name }));
+window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({
+    id: l.id,
+    name: l.name,
+    kurzname: l.kurzname,
+    eigene: !!l.eigene,
+    anzahlFilme: l.eigene ? l.filme.length : undefined
+}));
 window.getAktiveListeId = () => aktiveListeId;
 window.listeWechseln = listeWechseln;
+window.eigeneListeAnlegen = eigeneListeAnlegen;
+window.eigeneListeUmbenennen = eigeneListeUmbenennen;
+window.eigeneListeLoeschen = eigeneListeLoeschen;
+window.getEigeneListenAnzahl = () => eigeneListenLesen().length;
+window.getEigeneListenMax = () => EIGENE_LISTEN_MAX;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -563,10 +577,17 @@ async function trailerLaden(tmdbId) {
     }
 }
 
-function renderMovieCard(movie) {
+// eigeneKarte (optional): { attribute, werkzeugeHtml } - zusätzliche
+// Attribute am äußeren div (z. B. draggable) und zusätzliches HTML
+// (Entfernen-Button, Pfeile) für Filmkarten in eigenen Listen. Ohne
+// diesen Parameter unverändertes Verhalten für kuratierte Listen.
+function renderMovieCard(movie, eigeneKarte) {
     const watchedClass = getRating(movie.id) > 0 ? ' watched' : '';
+    const zusatzAttribute = eigeneKarte ? eigeneKarte.attribute : '';
+    const werkzeugeHtml = eigeneKarte ? eigeneKarte.werkzeugeHtml : '';
     return `
-<div class="movie-card${watchedClass}" data-movie-id="${movie.id}" onclick="openOverlay(this)">
+<div class="movie-card${watchedClass}" data-movie-id="${movie.id}"${zusatzAttribute} onclick="openOverlay(this)">
+    ${werkzeugeHtml}
     <div class="movie-poster">
         <img src="${movie.poster}" alt="Filmposter" loading="lazy" onerror="handlePosterError(this)">
     </div>
@@ -587,19 +608,32 @@ function renderMovieCard(movie) {
 
 function renderContent() {
     const container = document.querySelector('.container.content-wrapper');
-    const sectionsHtml = MOVIE_DATA.map(section => `
-<h2 id="${section.id}">${escapeHtml(section.title)} <span class="section-count" data-section-id="${section.id}"></span></h2>
-${section.movies.map(renderMovieCard).join('')}
-    `).join('');
+    // Eigene Listen bestehen aus genau einer Sektion mit der technischen
+    // ID "inhalt" (siehe ladeUndRendereAktiveListe) - eigene Werkzeuge
+    // (Film hinzufügen, Umsortieren) statt der sonst üblichen Sektions-
+    // Überschrift, siehe renderEigeneListeWerkzeuge/renderEigenerFilmCard.
+    const eigeneListeAktiv = MOVIE_DATA.length === 1 && MOVIE_DATA[0].id === 'inhalt';
+
     // Überschrift der aktiven Liste kommt bewusst aus dem Katalog
-    // (lists/manifest.json), nicht fest im Code - funktioniert dadurch
-    // automatisch auch für künftig selbst angelegte Listen (Stufe 2),
-    // ohne dass hier etwas geändert werden müsste.
+    // (lists/manifest.json bzw. den eigenen Listen), nicht fest im Code.
     const aktiveListe = findeListeNachId(aktiveListeId);
     const listenTitelHtml = aktiveListe
-        ? `<h2 class="listen-titel">${escapeHtml(aktiveListe.name)}</h2>`
+        ? `<h2 class="listen-titel">${escapeHtml(aktiveListe.name)}${eigeneListeAktiv ? ' <span class="section-count" data-section-id="inhalt"></span>' : ''}</h2>`
         : '';
-    container.innerHTML = listenTitelHtml + sectionsHtml;
+
+    let inhaltHtml;
+    if (eigeneListeAktiv) {
+        const filme = MOVIE_DATA[0].movies;
+        inhaltHtml = renderEigeneListeWerkzeuge(aktiveListe)
+            + filme.map((m, i) => renderEigenerFilmCard(m, aktiveListeId, i, filme.length)).join('');
+    } else {
+        inhaltHtml = MOVIE_DATA.map(section => `
+<h2 id="${section.id}">${escapeHtml(section.title)} <span class="section-count" data-section-id="${section.id}"></span></h2>
+${section.movies.map(m => renderMovieCard(m)).join('')}
+    `).join('');
+    }
+
+    container.innerHTML = listenTitelHtml + inhaltHtml;
     updateProgress();
     updateGroupDisplay();   // falls Gruppendaten bereits vorliegen
 
@@ -728,10 +762,416 @@ async function listeWechseln(listeId) {
     }
     aktiveListeId = listeId;
     aktiveListeIdSchreiben(listeId);
+    // Sortier-/Formularzustand gehört zur zuvor aktiven Liste - beim
+    // Wechsel zurücksetzen, sonst bliebe z. B. der Sortier-Modus einer
+    // eigenen Liste beim Wechsel zu einer anderen aktiv.
+    sortierModusAktiv = false;
+    eigenerFormularOffen = false;
     await ladeUndRendereAktiveListe();
     if (typeof window.onAktiveListeGeaendert === 'function') {
         window.onAktiveListeGeaendert();
     }
+}
+
+// --- Eigene Listen (Relaunch Stufe 2) ---
+// Komplett lokal gespeichert, taucht NICHT in lists/manifest.json auf.
+// Jede eigene Liste besteht aus genau einer Sektion mit der technischen
+// ID "inhalt" (siehe ladeUndRendereAktiveListe/renderContent/renderNav) -
+// so funktioniert dieselbe Rendering-, Bewertungs- und Fortschritts-
+// Logik wie bei kuratierten Listen unverändert weiter.
+const EIGENE_LISTEN_KEY = 'mcu-eigene-listen';
+const EIGENE_LISTEN_MAX = 3;
+const EIGENE_LISTE_FILME_MAX = 50;
+const EIGENER_KURZNAME_MAX = 15;
+const EIGENER_NAME_MAX = 40;
+
+// Katalog aus lists/manifest.json, OHNE eigene Listen - wird beim Start
+// einmal befüllt (siehe fetchAndRender). VERFUEGBARE_LISTEN ist davon
+// abgeleitet und enthält zusätzlich die eigenen Listen aus localStorage.
+let KATALOG_LISTEN = [];
+
+// UI-Zustand für die Werkzeuge auf der Inhaltsseite einer eigenen Liste
+// (siehe renderEigeneListeWerkzeuge/renderEigenerFilmCard weiter unten).
+let eigenerFormularOffen = false;
+let eigenerBeschreibungModus = 'tmdb';
+let sortierModusAktiv = false;
+let ziehenderFilmId = null;
+
+function eigeneListenLesen() {
+    try {
+        const roh = JSON.parse(localStorage.getItem(EIGENE_LISTEN_KEY) || '[]');
+        return Array.isArray(roh) ? roh : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function eigeneListenSchreiben(listen) {
+    try {
+        localStorage.setItem(EIGENE_LISTEN_KEY, JSON.stringify(listen));
+    } catch (e) {
+        console.warn('Eigene Listen konnten nicht gespeichert werden:', e);
+    }
+}
+
+function eigeneListeAlsKatalogEintrag(eigeneListe) {
+    return {
+        id: eigeneListe.id,
+        name: eigeneListe.name,
+        kurzname: eigeneListe.kurzname,
+        eigene: true,
+        filme: eigeneListe.filme
+    };
+}
+
+// Baut VERFUEGBARE_LISTEN aus dem festen Katalog + den aktuell in
+// localStorage liegenden eigenen Listen neu auf. Nach jeder Änderung an
+// einer eigenen Liste aufrufen, damit findeListeNachId() & Co. den
+// aktuellen Stand sehen.
+function listenKatalogNeuAufbauen() {
+    VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(eigeneListenLesen().map(eigeneListeAlsKatalogEintrag));
+}
+
+// Erzeugt aus Titel + Jahr dieselbe Art von ID wie posters/neuer-film.py
+// (id_slug_erzeugen) - bewusst identischer Algorithmus, damit ein Film,
+// der bereits in einer kuratierten Liste existiert, beim Hinzufügen zu
+// einer eigenen Liste dieselbe ID bekommt und seine Bewertung dadurch
+// automatisch übernommen wird (Bewertungen sind rein über die Film-ID
+// verknüpft, siehe getRating/setRating).
+function eigeneFilmIdErzeugen(titel, jahr) {
+    // \p{Diacritic}: Unicode-Eigenschaft für Akzentzeichen - fasst nach
+    // NFKD-Zerlegung (z. B. "é" -> "e" + Akzent) alle Akzente, nicht nur
+    // die im lateinischen Bereich üblichen.
+    const ohneAkzente = titel.normalize('NFKD').replace(/\p{Diacritic}/gu, '');
+    const slug = ohneAkzente.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${slug}-${jahr}`;
+}
+
+async function eigeneListeTmdbAbfragen(tmdbId, sprache) {
+    const url = sprache
+        ? `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=${sprache}`
+        : `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`;
+    const antwort = await fetch(url);
+    if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
+    return antwort.json();
+}
+
+// Analog zu neuer-film.py: erst Deutsch abfragen, fehlende Titel/Poster
+// (nicht jede TMDB-Sprache hat beides hinterlegt) auf Englisch nachfragen.
+async function eigeneListeTmdbDetailsHolen(tmdbId) {
+    const daten = await eigeneListeTmdbAbfragen(tmdbId, 'de-DE');
+    if (!daten.title || !daten.poster_path) {
+        const datenEn = await eigeneListeTmdbAbfragen(tmdbId, null);
+        if (!daten.title) daten.title = datenEn.title || datenEn.original_title;
+        if (!daten.poster_path) daten.poster_path = datenEn.poster_path;
+    }
+    return daten;
+}
+
+// Sammelt Kurz- und Langnamen aller Listen (klein geschrieben, getrimmt),
+// optional eine Liste per ID ausgenommen (beim Umbenennen die Liste
+// selbst). Dient der Prüfung auf doppelte Namen.
+function alleListenNamenGenutzt(ausgenommenId) {
+    const kurznamen = new Set();
+    const namen = new Set();
+    VERFUEGBARE_LISTEN.forEach(l => {
+        if (l.id === ausgenommenId) return;
+        kurznamen.add(l.kurzname.trim().toLowerCase());
+        namen.add(l.name.trim().toLowerCase());
+    });
+    return { kurznamen, namen };
+}
+
+function eigeneListeNamenPruefen(kurzname, name, ausgenommenId) {
+    if (!kurzname || !name) {
+        return 'Bitte Kurz- und Langname angeben.';
+    }
+    if (kurzname.length > EIGENER_KURZNAME_MAX) {
+        return `Kurzname darf höchstens ${EIGENER_KURZNAME_MAX} Zeichen lang sein.`;
+    }
+    if (name.length > EIGENER_NAME_MAX) {
+        return `Langname darf höchstens ${EIGENER_NAME_MAX} Zeichen lang sein.`;
+    }
+    const { kurznamen, namen } = alleListenNamenGenutzt(ausgenommenId);
+    if (kurznamen.has(kurzname.toLowerCase()) || namen.has(name.toLowerCase())) {
+        return 'Diesen Namen gibt es schon - bitte einen anderen wählen.';
+    }
+    return null;
+}
+
+function eigeneListeZufallsId() {
+    return 'eigene-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function eigeneListeAnlegen(kurznameRoh, nameRoh) {
+    const kurzname = (kurznameRoh || '').trim();
+    const name = (nameRoh || '').trim();
+
+    const eigeneListen = eigeneListenLesen();
+    if (eigeneListen.length >= EIGENE_LISTEN_MAX) {
+        return { ok: false, fehler: `Du hast bereits ${EIGENE_LISTEN_MAX} eigene Listen angelegt - mehr geht aktuell nur mit einem Konto (kommt in einer späteren Ausbaustufe).` };
+    }
+
+    const fehler = eigeneListeNamenPruefen(kurzname, name, null);
+    if (fehler) return { ok: false, fehler };
+
+    const neueListe = { id: eigeneListeZufallsId(), kurzname, name, filme: [] };
+    eigeneListen.push(neueListe);
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+    return { ok: true, listeId: neueListe.id };
+}
+
+function eigeneListeUmbenennen(listeId, kurznameRoh, nameRoh) {
+    const kurzname = (kurznameRoh || '').trim();
+    const name = (nameRoh || '').trim();
+
+    const eigeneListen = eigeneListenLesen();
+    const eintrag = eigeneListen.find(l => l.id === listeId);
+    if (!eintrag) return { ok: false, fehler: 'Liste nicht gefunden.' };
+
+    const fehler = eigeneListeNamenPruefen(kurzname, name, listeId);
+    if (fehler) return { ok: false, fehler };
+
+    eintrag.kurzname = kurzname;
+    eintrag.name = name;
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+    return { ok: true };
+}
+
+// Löscht eine eigene Liste. War sie gerade aktiv, wird automatisch auf
+// die erste verfügbare Liste gewechselt, damit die Seite nicht auf einer
+// nicht mehr existierenden Liste hängen bleibt.
+async function eigeneListeLoeschen(listeId) {
+    const eigeneListen = eigeneListenLesen().filter(l => l.id !== listeId);
+    eigeneListenSchreiben(eigeneListen);
+    const warAktiv = aktiveListeId === listeId;
+    listenKatalogNeuAufbauen();
+    if (warAktiv && VERFUEGBARE_LISTEN.length > 0) {
+        await listeWechseln(VERFUEGBARE_LISTEN[0].id);
+    }
+}
+
+// Fügt einen Film per TMDB-Link zu einer eigenen Liste hinzu. Holt Titel/
+// Jahr/Poster/Beschreibung live von TMDB - dieselben Daten, die auch
+// posters/neuer-film.py für kuratierte Listen abfragt, hier aber ohne
+// lokalen Poster-Download (das Poster bleibt ein TMDB-CDN-Link, siehe
+// Technische Anforderungen aus Issue #35).
+async function eigenerListeFilmHinzufuegen(listeId, tmdbLink, beschreibungModus, eigeneBeschreibung) {
+    const tmdbId = extractTmdbId(tmdbLink);
+    if (!tmdbId) {
+        return { ok: false, fehler: 'Ungültiger TMDB-Link - bitte einen Link zu einem Film auf themoviedb.org einfügen.' };
+    }
+
+    const eigeneListen = eigeneListenLesen();
+    const eintrag = eigeneListen.find(l => l.id === listeId);
+    if (!eintrag) return { ok: false, fehler: 'Liste nicht gefunden.' };
+
+    if (eintrag.filme.length >= EIGENE_LISTE_FILME_MAX) {
+        return { ok: false, fehler: 'Niemand kann so viele Filme sehen 😉 Bitte eine neue Liste anlegen.' };
+    }
+
+    let daten;
+    try {
+        daten = await eigeneListeTmdbDetailsHolen(tmdbId);
+    } catch (err) {
+        return { ok: false, fehler: 'Film wurde bei TMDB nicht gefunden - bitte den Link prüfen.' };
+    }
+
+    const jahr = (daten.release_date || '').slice(0, 4) || '????';
+    const titel = daten.title || daten.original_title || 'Unbekannter Titel';
+    const filmId = eigeneFilmIdErzeugen(titel, jahr);
+
+    if (eintrag.filme.some(f => f.id === filmId)) {
+        return { ok: false, fehler: 'Dieser Film ist bereits in der Liste.' };
+    }
+
+    const poster = daten.poster_path ? `https://image.tmdb.org/t/p/w500${daten.poster_path}` : '';
+    const desc = beschreibungModus === 'eigen'
+        ? (eigeneBeschreibung || '').trim()
+        : (daten.overview || '');
+
+    eintrag.filme.push({ id: filmId, tmdb: tmdbLink, poster, desc });
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+    return { ok: true };
+}
+
+function eigenerFilmEntfernen(listeId, filmId) {
+    const eigeneListen = eigeneListenLesen();
+    const eintrag = eigeneListen.find(l => l.id === listeId);
+    if (!eintrag) return;
+    eintrag.filme = eintrag.filme.filter(f => f.id !== filmId);
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+    ladeUndRendereAktiveListe();
+}
+
+// Für die Pfeiltasten auf Mobile: verschiebt einen Film um eine Position
+// (richtung -1 = nach oben, +1 = nach unten).
+function eigenerFilmVerschieben(listeId, filmId, richtung) {
+    const eigeneListen = eigeneListenLesen();
+    const eintrag = eigeneListen.find(l => l.id === listeId);
+    if (!eintrag) return;
+    const index = eintrag.filme.findIndex(f => f.id === filmId);
+    const zielIndex = index + richtung;
+    if (index === -1 || zielIndex < 0 || zielIndex >= eintrag.filme.length) return;
+    const [film] = eintrag.filme.splice(index, 1);
+    eintrag.filme.splice(zielIndex, 0, film);
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+    ladeUndRendereAktiveListe();
+}
+
+function eigenerFilmHoch(listeId, filmId) { eigenerFilmVerschieben(listeId, filmId, -1); }
+function eigenerFilmRunter(listeId, filmId) { eigenerFilmVerschieben(listeId, filmId, 1); }
+
+// Für Drag & Drop auf Desktop: übernimmt eine komplett neue Reihenfolge
+// (Liste von Film-IDs).
+function eigeneListeFilmeUmordnen(listeId, neueReihenfolgeIds) {
+    const eigeneListen = eigeneListenLesen();
+    const eintrag = eigeneListen.find(l => l.id === listeId);
+    if (!eintrag) return;
+    const nachId = Object.fromEntries(eintrag.filme.map(f => [f.id, f]));
+    const neu = neueReihenfolgeIds.map(id => nachId[id]).filter(Boolean);
+    if (neu.length !== eintrag.filme.length) return; // Sicherheitsnetz bei Inkonsistenz
+    eintrag.filme = neu;
+    eigeneListenSchreiben(eigeneListen);
+    listenKatalogNeuAufbauen();
+}
+
+function eigeneKarteDragStart(event, filmId) {
+    ziehenderFilmId = filmId;
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function eigeneKarteDragOver(event) {
+    event.preventDefault(); // notwendig, damit "drop" überhaupt feuert
+}
+
+function eigeneKarteDrop(event, zielFilmId, listeId) {
+    event.preventDefault();
+    if (!ziehenderFilmId || ziehenderFilmId === zielFilmId) return;
+
+    const karten = document.querySelectorAll('.container.content-wrapper .movie-card[data-movie-id]');
+    const ids = Array.from(karten, k => k.dataset.movieId);
+    const vonIndex = ids.indexOf(ziehenderFilmId);
+    const zielIndex = ids.indexOf(zielFilmId);
+    if (vonIndex === -1 || zielIndex === -1) return;
+
+    ids.splice(zielIndex, 0, ids.splice(vonIndex, 1)[0]);
+    eigeneListeFilmeUmordnen(listeId, ids);
+    ziehenderFilmId = null;
+    ladeUndRendereAktiveListe();
+}
+
+function sortierModusUmschalten() {
+    sortierModusAktiv = !sortierModusAktiv;
+    renderContent();
+}
+
+function eigenerFormularOeffnen() {
+    eigenerFormularOffen = true;
+    eigenerBeschreibungModus = 'tmdb';
+    renderContent();
+}
+
+function eigenerFormularSchliessen() {
+    eigenerFormularOffen = false;
+    renderContent();
+}
+
+function eigeneBeschreibungModusSetzen(modus) {
+    eigenerBeschreibungModus = modus;
+    renderContent();
+}
+
+function eigenerFilmFehlerAnzeigen(text) {
+    const el = document.getElementById('eigener-film-fehler');
+    if (el) { el.textContent = text; el.style.display = 'block'; }
+}
+
+async function eigenerFilmAbsenden(listeId) {
+    const link = (document.getElementById('eigener-film-link')?.value || '').trim();
+    const eigeneBeschreibung = document.getElementById('eigener-film-beschreibung')?.value || '';
+
+    if (!link) {
+        eigenerFilmFehlerAnzeigen('Bitte einen TMDB-Link einfügen.');
+        return;
+    }
+
+    const ergebnis = await eigenerListeFilmHinzufuegen(listeId, link, eigenerBeschreibungModus, eigeneBeschreibung);
+    if (!ergebnis.ok) {
+        eigenerFilmFehlerAnzeigen(ergebnis.fehler);
+        return;
+    }
+
+    eigenerFormularOffen = false;
+    await ladeUndRendereAktiveListe();
+}
+
+// Werkzeugleiste oberhalb der Filmkarten einer aktiven eigenen Liste:
+// Film hinzufügen (mit Wahl der Beschreibungsquelle) und Sortier-Modus.
+function renderEigeneListeWerkzeuge(eigeneListe) {
+    const limitErreicht = eigeneListe.filme.length >= EIGENE_LISTE_FILME_MAX;
+
+    const formular = eigenerFormularOffen ? `
+        <div class="eigene-formular">
+            <div class="gruppen-zeile">
+                <input type="text" id="eigener-film-link" placeholder="TMDB-Link einfügen, z. B. https://www.themoviedb.org/movie/1726-iron-man">
+            </div>
+            <label class="gruppen-check">
+                <input type="radio" name="eigene-beschreibung" value="tmdb" ${eigenerBeschreibungModus === 'tmdb' ? 'checked' : ''} onchange="eigeneBeschreibungModusSetzen('tmdb')">
+                TMDB-Beschreibung übernehmen
+            </label>
+            <label class="gruppen-check">
+                <input type="radio" name="eigene-beschreibung" value="eigen" ${eigenerBeschreibungModus === 'eigen' ? 'checked' : ''} onchange="eigeneBeschreibungModusSetzen('eigen')">
+                Eigene Beschreibung schreiben
+            </label>
+            ${eigenerBeschreibungModus === 'eigen' ? `
+            <div class="gruppen-zeile">
+                <textarea id="eigener-film-beschreibung" placeholder="Kurze Beschreibung der Handlung..." rows="2" style="flex:1; resize:vertical;"></textarea>
+            </div>` : ''}
+            <div id="eigener-film-fehler" class="eigene-fehler" style="display:none;"></div>
+            <button class="gruppen-btn schmal" onclick="eigenerFilmAbsenden('${eigeneListe.id}')">Hinzufügen</button>
+            <button class="gruppen-btn schmal grau" onclick="eigenerFormularSchliessen()">Abbrechen</button>
+        </div>` : '';
+
+    const hinzufuegenButton = limitErreicht
+        ? '<p class="eigene-hinweis">Niemand kann so viele Filme sehen 😉 Bitte eine neue Liste anlegen.</p>'
+        : (eigenerFormularOffen ? '' : `<button class="gruppen-btn schmal" onclick="eigenerFormularOeffnen()">+ Film hinzufügen</button>`);
+
+    const sortierButton = eigeneListe.filme.length > 1
+        ? `<button class="gruppen-btn schmal grau" onclick="sortierModusUmschalten()">${sortierModusAktiv ? 'Fertig' : '↕ Reihenfolge ändern'}</button>`
+        : '';
+
+    return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${formular}</div>`;
+}
+
+// Baut eine Filmkarte für eine eigene Liste: dieselbe Karte wie bei
+// kuratierten Listen (renderMovieCard), ergänzt um Entfernen-Button und,
+// im Sortier-Modus, Drag&Drop (Desktop) bzw. Pfeiltasten (Mobile) -
+// Umschaltpunkt ist dieselbe 768px-Grenze wie im responsiven CSS.
+function renderEigenerFilmCard(movie, listeId, index, gesamt) {
+    const mobile = window.matchMedia('(max-width: 768px)').matches;
+    const ziehbar = sortierModusAktiv && !mobile;
+
+    const attribute = ziehbar
+        ? ` draggable="true" ondragstart="eigeneKarteDragStart(event, '${movie.id}')" ondragover="eigeneKarteDragOver(event)" ondrop="eigeneKarteDrop(event, '${movie.id}', '${listeId}')"`
+        : '';
+
+    const pfeile = (sortierModusAktiv && mobile) ? `
+        <div class="eigene-pfeile" onclick="event.stopPropagation()">
+            <button ${index === 0 ? 'disabled' : ''} onclick="eigenerFilmHoch('${listeId}', '${movie.id}')" aria-label="Nach oben verschieben">▲</button>
+            <button ${index === gesamt - 1 ? 'disabled' : ''} onclick="eigenerFilmRunter('${listeId}', '${movie.id}')" aria-label="Nach unten verschieben">▼</button>
+        </div>` : '';
+
+    const werkzeugeHtml = `
+        <button class="eigener-film-entfernen" onclick="event.stopPropagation(); eigenerFilmEntfernen('${listeId}', '${movie.id}')" aria-label="Film aus Liste entfernen">✕</button>
+        ${pfeile}`;
+
+    return renderMovieCard(movie, { attribute, werkzeugeHtml });
 }
 
 async function ladeUndRendereAktiveListe() {
@@ -743,20 +1183,29 @@ async function ladeUndRendereAktiveListe() {
     }
 
     try {
-        const response = await fetch(eintrag.datei);
-        if (!response.ok) {
-            const fehler = new Error('HTTP ' + response.status);
-            fehler.datei = eintrag.datei;
-            throw fehler;
-        }
-
         let raw;
-        try {
-            raw = await response.json();
-        } catch (parseErr) {
-            const fehler = new Error('INVALID_JSON');
-            fehler.datei = eintrag.datei;
-            throw fehler;
+        if (eintrag.eigene) {
+            // Eigene Liste: Filme liegen bereits vollständig in localStorage
+            // vor, kein Netzwerkzugriff nötig. Titel der Sektion entspricht
+            // dem Listennamen (siehe validateMovieData: "title" ist
+            // Pflicht) - renderContent/renderNav blenden die dadurch
+            // eigentlich doppelte Überschrift für die Sektions-ID "inhalt"
+            // gezielt aus.
+            raw = [{ id: 'inhalt', title: eintrag.name, navLabel: eintrag.kurzname, movies: eintrag.filme }];
+        } else {
+            const response = await fetch(eintrag.datei);
+            if (!response.ok) {
+                const fehler = new Error('HTTP ' + response.status);
+                fehler.datei = eintrag.datei;
+                throw fehler;
+            }
+            try {
+                raw = await response.json();
+            } catch (parseErr) {
+                const fehler = new Error('INVALID_JSON');
+                fehler.datei = eintrag.datei;
+                throw fehler;
+            }
         }
 
         const { sections, skippedSections, skippedMovies } = validateMovieData(raw);
@@ -800,7 +1249,8 @@ async function fetchAndRender() {
             throw fehler;
         }
 
-        VERFUEGBARE_LISTEN = katalog;
+        KATALOG_LISTEN = katalog;
+        listenKatalogNeuAufbauen();
 
         const gespeichert = aktiveListeIdLesen();
         aktiveListeId = (gespeichert && findeListeNachId(gespeichert))
