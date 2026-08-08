@@ -254,6 +254,21 @@
             text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
+        /* Überschrift der aktiven Liste (z. B. "Marvel Cinematic Universe") -
+           bewusst deutlich größer als die Sektions-Überschriften darunter,
+           damit klar erkennbar ist: das ist die übergeordnete Ebene. Kommt
+           dynamisch aus lists/manifest.json, siehe renderContent(). */
+        .listen-titel {
+            color: var(--text-color);
+            font-size: 2.3rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 0 0 30px;
+            border-left: none;
+            padding-left: 0;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+        }
+
         /* Desktop: Poster-Bleed-Effekt (Issue #14).
            aspect-ratio 50/11 koppelt die Kartenhöhe an die Poster-Breite (22%),
            sodass der sichtbare Poster-Ausschnitt quadratisch ist. Da die Poster
@@ -1140,6 +1155,11 @@
                 font-size: 1.3rem;
                 /* Dynamischer Anker-Abstand, damit H2 perfekt unter dem Header sitzt */
                 scroll-margin-top: clamp(65px, 14vw, 90px);
+            }
+
+            .listen-titel {
+                font-size: 1.6rem;
+                margin-bottom: 20px;
             }
 
             /* --- Poster-Bleed-Effekt (nur Mobile): Poster liegt als

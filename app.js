@@ -591,7 +591,15 @@ function renderContent() {
 <h2 id="${section.id}">${escapeHtml(section.title)} <span class="section-count" data-section-id="${section.id}"></span></h2>
 ${section.movies.map(renderMovieCard).join('')}
     `).join('');
-    container.innerHTML = sectionsHtml;
+    // Überschrift der aktiven Liste kommt bewusst aus dem Katalog
+    // (lists/manifest.json), nicht fest im Code - funktioniert dadurch
+    // automatisch auch für künftig selbst angelegte Listen (Stufe 2),
+    // ohne dass hier etwas geändert werden müsste.
+    const aktiveListe = findeListeNachId(aktiveListeId);
+    const listenTitelHtml = aktiveListe
+        ? `<h2 class="listen-titel">${escapeHtml(aktiveListe.name)}</h2>`
+        : '';
+    container.innerHTML = listenTitelHtml + sectionsHtml;
     updateProgress();
     updateGroupDisplay();   // falls Gruppendaten bereits vorliegen
 
@@ -736,19 +744,27 @@ async function ladeUndRendereAktiveListe() {
 
     try {
         const response = await fetch(eintrag.datei);
-        if (!response.ok) throw new Error('HTTP ' + response.status);
+        if (!response.ok) {
+            const fehler = new Error('HTTP ' + response.status);
+            fehler.datei = eintrag.datei;
+            throw fehler;
+        }
 
         let raw;
         try {
             raw = await response.json();
         } catch (parseErr) {
-            throw new Error('INVALID_JSON');
+            const fehler = new Error('INVALID_JSON');
+            fehler.datei = eintrag.datei;
+            throw fehler;
         }
 
         const { sections, skippedSections, skippedMovies } = validateMovieData(raw);
 
         if (sections.length === 0) {
-            throw new Error('NO_VALID_DATA');
+            const fehler = new Error('NO_VALID_DATA');
+            fehler.datei = eintrag.datei;
+            throw fehler;
         }
 
         MOVIE_DATA = sections;
@@ -771,11 +787,17 @@ async function fetchAndRender() {
     const container = document.querySelector('.container.content-wrapper');
     try {
         const response = await fetch('lists/manifest.json');
-        if (!response.ok) throw new Error('HTTP ' + response.status);
+        if (!response.ok) {
+            const fehler = new Error('HTTP ' + response.status);
+            fehler.datei = 'lists/manifest.json';
+            throw fehler;
+        }
         const katalog = await response.json();
 
         if (!Array.isArray(katalog) || katalog.length === 0) {
-            throw new Error('NO_VALID_DATA');
+            const fehler = new Error('NO_VALID_DATA');
+            fehler.datei = 'lists/manifest.json';
+            throw fehler;
         }
 
         VERFUEGBARE_LISTEN = katalog;
@@ -795,6 +817,7 @@ async function fetchAndRender() {
 function buildErrorMessage(err) {
     const wrap = (text) =>
         '<p style="text-align:center; padding: 40px 16px; line-height: 1.7;">' + text + '</p>';
+    const datei = (err && err.datei) || 'lists/manifest.json';
 
     if (!navigator.onLine) {
         return wrap(
@@ -804,21 +827,21 @@ function buildErrorMessage(err) {
     }
     if (err && err.message === 'INVALID_JSON') {
         return wrap(
-            'Die Filmliste konnte nicht gelesen werden - die Datei ist ' +
+            `<code>${datei}</code> konnte nicht gelesen werden - die Datei ist ` +
             'vermutlich fehlerhaft (z.&nbsp;B. ein fehlendes oder überzähliges Komma). ' +
             'Details stehen in der Browser-Konsole.'
         );
     }
     if (err && err.message === 'NO_VALID_DATA') {
         return wrap(
-            'Die Filmdaten enthalten keine gültigen Einträge. ' +
+            `<code>${datei}</code> enthält keine gültigen Einträge. ` +
             'Details stehen in der Browser-Konsole.'
         );
     }
     return wrap(
         'Filmdaten konnten nicht geladen werden. Läuft die Seite über ' +
         'http(s) (z.&nbsp;B. GitHub Pages oder einen lokalen Webserver) und ' +
-        'liegt <code>lists/manifest.json</code> im selben Ordner wie diese Datei?'
+        `liegt <code>${datei}</code> im selben Ordner wie diese Datei?`
     );
 }
 
