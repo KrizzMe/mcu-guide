@@ -146,6 +146,9 @@ window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({
     name: l.name,
     kurzname: l.kurzname,
     eigene: !!l.eigene,
+    herkunft: l.herkunft,
+    bearbeitbar: l.eigene ? l.bearbeitbar : undefined,
+    sperrgrund: l.eigene ? l.sperrgrund : undefined,
     anzahlFilme: l.eigene ? l.filme.length : undefined
 }));
 window.getAktiveListeId = () => aktiveListeId;
@@ -155,6 +158,8 @@ window.eigeneListeUmbenennen = eigeneListeUmbenennen;
 window.eigeneListeLoeschen = eigeneListeLoeschen;
 window.getEigeneListenAnzahl = () => eigeneListenLesen().length;
 window.getEigeneListenMax = () => EIGENE_LISTEN_MAX;
+window.getKontoListenAnzahl = () => kontoListenCacheLesen().length;
+window.getKontoListenMax = () => KONTO_LISTEN_MAX;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -624,7 +629,7 @@ function renderContent() {
     if (eigeneListeAktiv) {
         const filme = MOVIE_DATA[0].movies;
         inhaltHtml = renderEigeneListeWerkzeuge(aktiveListe)
-            + filme.map((m, i) => renderEigenerFilmCard(m, aktiveListeId, i, filme.length)).join('');
+            + filme.map((m, i) => renderEigenerFilmCard(m, aktiveListeId, i, filme.length, aktiveListe.bearbeitbar)).join('');
     } else {
         inhaltHtml = MOVIE_DATA.map(section => `
 <h2 id="${section.id}">${escapeHtml(section.title)} <span class="section-count" data-section-id="${section.id}"></span></h2>
@@ -780,13 +785,19 @@ async function listeWechseln(listeId) {
 // Logik wie bei kuratierten Listen unverändert weiter.
 const EIGENE_LISTEN_KEY = 'mcu-eigene-listen';
 const EIGENE_LISTEN_MAX = 3;
+// Konto-Listen-Cache: Spiegel der Firestore-Daten (users/{uid}/listen),
+// dient NUR der Anzeige - Firestore ist hier die führende Quelle, anders
+// als bei Bewertungen (Issue #37, bewusste Abweichung vom sonstigen
+// Grundsatz "lokal ist führend").
+const KONTO_LISTEN_CACHE_KEY = 'mcu-konto-listen-cache';
+const KONTO_LISTEN_MAX = 10;
 const EIGENE_LISTE_FILME_MAX = 50;
 const EIGENER_KURZNAME_MAX = 15;
 const EIGENER_NAME_MAX = 40;
 
 // Katalog aus lists/manifest.json, OHNE eigene Listen - wird beim Start
 // einmal befüllt (siehe fetchAndRender). VERFUEGBARE_LISTEN ist davon
-// abgeleitet und enthält zusätzlich die eigenen Listen aus localStorage.
+// abgeleitet und enthält zusätzlich die eigenen Listen (lokal + Konto).
 let KATALOG_LISTEN = [];
 
 // UI-Zustand für die Werkzeuge auf der Inhaltsseite einer eigenen Liste
@@ -813,22 +824,117 @@ function eigeneListenSchreiben(listen) {
     }
 }
 
-function eigeneListeAlsKatalogEintrag(eigeneListe) {
-    return {
-        id: eigeneListe.id,
-        name: eigeneListe.name,
-        kurzname: eigeneListe.kurzname,
-        eigene: true,
-        filme: eigeneListe.filme
-    };
+// Cache der kontogebundenen Listen (siehe KONTO_LISTEN_CACHE_KEY oben).
+// Wird von groups.js bei Login/Änderungen befüllt (kontoListenCacheSetzen
+// & Co. weiter unten), hier nur Lesen/Schreiben.
+function kontoListenCacheLesen() {
+    try {
+        const roh = JSON.parse(localStorage.getItem(KONTO_LISTEN_CACHE_KEY) || '[]');
+        return Array.isArray(roh) ? roh : [];
+    } catch (e) {
+        return [];
+    }
 }
 
-// Baut VERFUEGBARE_LISTEN aus dem festen Katalog + den aktuell in
-// localStorage liegenden eigenen Listen neu auf. Nach jeder Änderung an
-// einer eigenen Liste aufrufen, damit findeListeNachId() & Co. den
-// aktuellen Stand sehen.
+function kontoListenCacheSchreiben(listen) {
+    try {
+        localStorage.setItem(KONTO_LISTEN_CACHE_KEY, JSON.stringify(listen));
+    } catch (e) {
+        console.warn('Konto-Listen-Cache konnte nicht gespeichert werden:', e);
+    }
+}
+
+// Für groups.js: Cache nach dem Laden aus Firestore komplett ersetzen
+// bzw. nach einer einzelnen Änderung (Anlegen/Speichern/Löschen)
+// aktualisieren - hält den Cache ohne eigene Firestore-Kenntnis in app.js
+// synchron.
+window.kontoListenCacheSetzen = function (listen) {
+    kontoListenCacheSchreiben(listen);
+    listenKatalogNeuAufbauen();
+};
+window.kontoListenCacheAktualisieren = function (liste) {
+    const alle = kontoListenCacheLesen();
+    const index = alle.findIndex(l => l.id === liste.id);
+    if (index === -1) alle.push(liste); else alle[index] = liste;
+    kontoListenCacheSchreiben(alle);
+    listenKatalogNeuAufbauen();
+};
+window.kontoListenCacheEntfernen = function (listeId) {
+    kontoListenCacheSchreiben(kontoListenCacheLesen().filter(l => l.id !== listeId));
+    listenKatalogNeuAufbauen();
+};
+
+// Grund, warum eine eigene Liste GERADE NICHT bearbeitet werden kann,
+// oder null wenn sie bearbeitbar ist. Lokale Listen sind immer
+// bearbeitbar. Konto-Listen brauchen laut Issue #37 bewusst eine
+// Internetverbindung (kein Offline-Bearbeiten, keine Warteschlange wie
+// bei Bewertungen) UND eine echte Anmeldung (nicht anonym).
+function eigeneListeSperrgrund(liste) {
+    if (liste.herkunft !== 'konto') return null;
+    if (!(typeof window.istEchtAngemeldet === 'function' && window.istEchtAngemeldet())) {
+        return 'Diese Liste ist nur lesbar, weil du nicht mehr angemeldet bist.';
+    }
+    if (!navigator.onLine) {
+        return 'Zum Bearbeiten wird eine Internetverbindung benötigt.';
+    }
+    return null;
+}
+
+function eigeneListeAlsKatalogEintrag(liste, herkunft) {
+    const eintrag = {
+        id: liste.id,
+        name: liste.name,
+        kurzname: liste.kurzname,
+        eigene: true,
+        herkunft,
+        filme: liste.filme
+    };
+    eintrag.sperrgrund = eigeneListeSperrgrund(eintrag);
+    eintrag.bearbeitbar = !eintrag.sperrgrund;
+    return eintrag;
+}
+
+// Sucht eine eigene Liste unabhängig von ihrer Herkunft (lokal oder
+// Konto) und markiert das Ergebnis entsprechend - Grundlage für alle
+// Änderungsfunktionen weiter unten, die beide Speicherorte gleich
+// behandeln können sollen.
+function eigeneListeFinden(listeId) {
+    const lokal = eigeneListenLesen().find(l => l.id === listeId);
+    if (lokal) return { ...lokal, herkunft: 'lokal' };
+    const konto = kontoListenCacheLesen().find(l => l.id === listeId);
+    if (konto) return { ...konto, herkunft: 'konto' };
+    return null;
+}
+
+// Zentrale Speicherstelle für eine geänderte eigene Liste - lokal oder
+// am Konto, je nach Herkunft. Die Änderungsfunktionen (Filme
+// hinzufügen/entfernen/umsortieren, umbenennen) müssen dadurch selbst
+// nicht wissen, WO die Liste landet.
+async function eigeneListePersistieren(liste) {
+    // "herkunft" ist ein von eigeneListeFinden() angehängtes Merkmal, kein
+    // Teil der eigentlichen Listendaten - nicht mit abspeichern.
+    const { herkunft, ...daten } = liste;
+    if (herkunft === 'konto') {
+        if (typeof window.kontoListeSpeichern !== 'function') {
+            throw new Error('Kontoanbindung nicht verfügbar.');
+        }
+        await window.kontoListeSpeichern(daten);
+    } else {
+        const alle = eigeneListenLesen();
+        const index = alle.findIndex(l => l.id === daten.id);
+        if (index === -1) alle.push(daten); else alle[index] = daten;
+        eigeneListenSchreiben(alle);
+    }
+    listenKatalogNeuAufbauen();
+}
+
+// Baut VERFUEGBARE_LISTEN aus dem festen Katalog + den eigenen Listen
+// (lokal und Konto) neu auf. Nach jeder Änderung aufrufen, damit
+// findeListeNachId() & Co. den aktuellen Stand sehen.
 function listenKatalogNeuAufbauen() {
-    VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(eigeneListenLesen().map(eigeneListeAlsKatalogEintrag));
+    const lokaleEintraege = eigeneListenLesen().map(l => eigeneListeAlsKatalogEintrag(l, 'lokal'));
+    const kontoEintraege = kontoListenCacheLesen().map(l => eigeneListeAlsKatalogEintrag(l, 'konto'));
+    VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(lokaleEintraege, kontoEintraege);
 }
 
 // Erzeugt aus Titel + Jahr dieselbe Art von ID wie posters/neuer-film.py
@@ -902,17 +1008,41 @@ function eigeneListeZufallsId() {
     return 'eigene-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-function eigeneListeAnlegen(kurznameRoh, nameRoh) {
+// Echt angemeldet + online -> neue Listen gehen direkt ans Konto (bis zu
+// KONTO_LISTEN_MAX), sonst rein lokal (bis zu EIGENE_LISTEN_MAX). Der
+// Nutzer wählt das nicht separat aus - die Herkunft ergibt sich aus dem
+// aktuellen Anmeldestatus, genau wie bei Bewertungen, die automatisch
+// geteilt werden, sobald eine Gruppe aktiv ist.
+async function eigeneListeAnlegen(kurznameRoh, nameRoh) {
     const kurzname = (kurznameRoh || '').trim();
     const name = (nameRoh || '').trim();
 
-    const eigeneListen = eigeneListenLesen();
-    if (eigeneListen.length >= EIGENE_LISTEN_MAX) {
-        return { ok: false, fehler: `Du hast bereits ${EIGENE_LISTEN_MAX} eigene Listen angelegt - mehr geht aktuell nur mit einem Konto (kommt in einer späteren Ausbaustufe).` };
-    }
-
     const fehler = eigeneListeNamenPruefen(kurzname, name, null);
     if (fehler) return { ok: false, fehler };
+
+    const kontoBereit = typeof window.istEchtAngemeldet === 'function' && window.istEchtAngemeldet();
+
+    if (kontoBereit) {
+        if (!navigator.onLine) {
+            return { ok: false, fehler: 'Zum Anlegen einer Konto-Liste wird eine Internetverbindung benötigt.' };
+        }
+        if (kontoListenCacheLesen().length >= KONTO_LISTEN_MAX) {
+            return { ok: false, fehler: `Du hast bereits ${KONTO_LISTEN_MAX} Listen in deinem Konto gespeichert - bitte erst eine löschen, um Platz zu schaffen.` };
+        }
+        const neueListe = { id: eigeneListeZufallsId(), kurzname, name, filme: [] };
+        try {
+            await window.kontoListeAnlegen(neueListe);
+        } catch (err) {
+            return { ok: false, fehler: 'Liste konnte nicht im Konto gespeichert werden: ' + (err.message || err) };
+        }
+        listenKatalogNeuAufbauen();
+        return { ok: true, listeId: neueListe.id };
+    }
+
+    const eigeneListen = eigeneListenLesen();
+    if (eigeneListen.length >= EIGENE_LISTEN_MAX) {
+        return { ok: false, fehler: `Du hast bereits ${EIGENE_LISTEN_MAX} eigene Listen angelegt - mehr geht mit einer Anmeldung (bis zu ${KONTO_LISTEN_MAX}).` };
+    }
 
     const neueListe = { id: eigeneListeZufallsId(), kurzname, name, filme: [] };
     eigeneListen.push(neueListe);
@@ -921,36 +1051,115 @@ function eigeneListeAnlegen(kurznameRoh, nameRoh) {
     return { ok: true, listeId: neueListe.id };
 }
 
-function eigeneListeUmbenennen(listeId, kurznameRoh, nameRoh) {
+async function eigeneListeUmbenennen(listeId, kurznameRoh, nameRoh) {
     const kurzname = (kurznameRoh || '').trim();
     const name = (nameRoh || '').trim();
 
-    const eigeneListen = eigeneListenLesen();
-    const eintrag = eigeneListen.find(l => l.id === listeId);
-    if (!eintrag) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
 
     const fehler = eigeneListeNamenPruefen(kurzname, name, listeId);
     if (fehler) return { ok: false, fehler };
 
-    eintrag.kurzname = kurzname;
-    eintrag.name = name;
-    eigeneListenSchreiben(eigeneListen);
-    listenKatalogNeuAufbauen();
+    liste.kurzname = kurzname;
+    liste.name = name;
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        return { ok: false, fehler: 'Änderung konnte nicht gespeichert werden: ' + (err.message || err) };
+    }
     return { ok: true };
 }
 
-// Löscht eine eigene Liste. War sie gerade aktiv, wird automatisch auf
-// die erste verfügbare Liste gewechselt, damit die Seite nicht auf einer
-// nicht mehr existierenden Liste hängen bleibt.
+// Löscht eine eigene Liste (lokal oder am Konto). War sie gerade aktiv,
+// wird automatisch auf die erste verfügbare Liste gewechselt, damit die
+// Seite nicht auf einer nicht mehr existierenden Liste hängen bleibt.
 async function eigeneListeLoeschen(listeId) {
-    const eigeneListen = eigeneListenLesen().filter(l => l.id !== listeId);
-    eigeneListenSchreiben(eigeneListen);
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
+
+    if (liste.herkunft === 'konto') {
+        try {
+            await window.kontoListeLoeschen(listeId);
+        } catch (err) {
+            return { ok: false, fehler: 'Liste konnte nicht gelöscht werden: ' + (err.message || err) };
+        }
+    } else {
+        eigeneListenSchreiben(eigeneListenLesen().filter(l => l.id !== listeId));
+    }
+
     const warAktiv = aktiveListeId === listeId;
     listenKatalogNeuAufbauen();
     if (warAktiv && VERFUEGBARE_LISTEN.length > 0) {
         await listeWechseln(VERFUEGBARE_LISTEN[0].id);
     }
+    return { ok: true };
 }
+
+// --- Login-Abgleich lokaler Listen mit dem Konto (Issue #37) ---
+// Wird von groups.js nach jedem erfolgreichen Laden der Konto-Listen
+// aufgerufen. Prüft, ob rein lokale Listen unkompliziert automatisch
+// hochgeladen werden können (kein Namenskonflikt, genug freie Plätze)
+// oder ob der Nutzer entscheiden muss (siehe Antworten zu Issue #37:
+// "Nutzer entscheiden lassen").
+function listenAbgleichVorschlag() {
+    const lokaleListen = eigeneListenLesen();
+    const kontoListen = kontoListenCacheLesen();
+    const kontoKurznamen = new Set(kontoListen.map(l => l.kurzname.trim().toLowerCase()));
+    const kontoNamen = new Set(kontoListen.map(l => l.name.trim().toLowerCase()));
+
+    const kandidaten = lokaleListen.map(l => ({
+        id: l.id,
+        kurzname: l.kurzname,
+        name: l.name,
+        anzahlFilme: l.filme.length,
+        kollision: kontoKurznamen.has(l.kurzname.trim().toLowerCase())
+                   || kontoNamen.has(l.name.trim().toLowerCase())
+    }));
+
+    const platzFrei = Math.max(0, KONTO_LISTEN_MAX - kontoListen.length);
+    const automatischMoeglich = kandidaten.length > 0
+        && kandidaten.every(k => !k.kollision)
+        && kandidaten.length <= platzFrei;
+
+    return { kandidaten, platzFrei, automatischMoeglich };
+}
+window.listenAbgleichVorschlag = listenAbgleichVorschlag;
+
+// Lädt eine (vom Nutzer bestätigte) Auswahl lokaler Listen ins Konto
+// hoch und entfernt sie danach aus dem rein lokalen Speicher. uploads:
+// [{ id, kurzname, name }] - kurzname/name ggf. angepasst, um eine
+// Namenskollision aufzulösen. Gibt die Anzahl tatsächlich hochgeladener
+// Listen zurück.
+async function listenAbgleichUebernehmen(uploads) {
+    let hochgeladen = 0;
+    for (const upload of uploads) {
+        const original = eigeneListenLesen().find(l => l.id === upload.id);
+        if (!original) continue;
+
+        const neueListe = {
+            id: original.id,
+            kurzname: upload.kurzname.trim(),
+            name: upload.name.trim(),
+            filme: original.filme
+        };
+        try {
+            await window.kontoListeAnlegen(neueListe);
+        } catch (err) {
+            console.warn('Liste konnte beim Abgleich nicht hochgeladen werden:', original.id, err);
+            continue;
+        }
+        eigeneListenSchreiben(eigeneListenLesen().filter(l => l.id !== original.id));
+        hochgeladen++;
+    }
+    listenKatalogNeuAufbauen();
+    return hochgeladen;
+}
+window.listenAbgleichUebernehmen = listenAbgleichUebernehmen;
 
 // Fügt einen Film per TMDB-Link zu einer eigenen Liste hinzu. Holt Titel/
 // Jahr/Poster/Beschreibung live von TMDB - dieselben Daten, die auch
@@ -963,11 +1172,12 @@ async function eigenerListeFilmHinzufuegen(listeId, tmdbLink, beschreibungModus,
         return { ok: false, fehler: 'Ungültiger TMDB-Link - bitte einen Link zu einem Film auf themoviedb.org einfügen.' };
     }
 
-    const eigeneListen = eigeneListenLesen();
-    const eintrag = eigeneListen.find(l => l.id === listeId);
-    if (!eintrag) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
 
-    if (eintrag.filme.length >= EIGENE_LISTE_FILME_MAX) {
+    if (liste.filme.length >= EIGENE_LISTE_FILME_MAX) {
         return { ok: false, fehler: 'Niemand kann so viele Filme sehen 😉 Bitte eine neue Liste anlegen.' };
     }
 
@@ -982,7 +1192,7 @@ async function eigenerListeFilmHinzufuegen(listeId, tmdbLink, beschreibungModus,
     const titel = daten.title || daten.original_title || 'Unbekannter Titel';
     const filmId = eigeneFilmIdErzeugen(titel, jahr);
 
-    if (eintrag.filme.some(f => f.id === filmId)) {
+    if (liste.filme.some(f => f.id === filmId)) {
         return { ok: false, fehler: 'Dieser Film ist bereits in der Liste.' };
     }
 
@@ -991,35 +1201,46 @@ async function eigenerListeFilmHinzufuegen(listeId, tmdbLink, beschreibungModus,
         ? (eigeneBeschreibung || '').trim()
         : (daten.overview || '');
 
-    eintrag.filme.push({ id: filmId, tmdb: tmdbLink, poster, desc });
-    eigeneListenSchreiben(eigeneListen);
-    listenKatalogNeuAufbauen();
+    liste.filme.push({ id: filmId, tmdb: tmdbLink, poster, desc });
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        return { ok: false, fehler: 'Film konnte nicht gespeichert werden: ' + (err.message || err) };
+    }
     return { ok: true };
 }
 
-function eigenerFilmEntfernen(listeId, filmId) {
-    const eigeneListen = eigeneListenLesen();
-    const eintrag = eigeneListen.find(l => l.id === listeId);
-    if (!eintrag) return;
-    eintrag.filme = eintrag.filme.filter(f => f.id !== filmId);
-    eigeneListenSchreiben(eigeneListen);
-    listenKatalogNeuAufbauen();
+async function eigenerFilmEntfernen(listeId, filmId) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return;
+    if (eigeneListeSperrgrund(liste)) return; // Steuerelemente sind dafür ohnehin ausgeblendet
+    liste.filme = liste.filme.filter(f => f.id !== filmId);
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        console.warn('Film konnte nicht entfernt werden:', err);
+        return;
+    }
     ladeUndRendereAktiveListe();
 }
 
 // Für die Pfeiltasten auf Mobile: verschiebt einen Film um eine Position
 // (richtung -1 = nach oben, +1 = nach unten).
-function eigenerFilmVerschieben(listeId, filmId, richtung) {
-    const eigeneListen = eigeneListenLesen();
-    const eintrag = eigeneListen.find(l => l.id === listeId);
-    if (!eintrag) return;
-    const index = eintrag.filme.findIndex(f => f.id === filmId);
+async function eigenerFilmVerschieben(listeId, filmId, richtung) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return;
+    if (eigeneListeSperrgrund(liste)) return;
+    const index = liste.filme.findIndex(f => f.id === filmId);
     const zielIndex = index + richtung;
-    if (index === -1 || zielIndex < 0 || zielIndex >= eintrag.filme.length) return;
-    const [film] = eintrag.filme.splice(index, 1);
-    eintrag.filme.splice(zielIndex, 0, film);
-    eigeneListenSchreiben(eigeneListen);
-    listenKatalogNeuAufbauen();
+    if (index === -1 || zielIndex < 0 || zielIndex >= liste.filme.length) return;
+    const [film] = liste.filme.splice(index, 1);
+    liste.filme.splice(zielIndex, 0, film);
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        console.warn('Reihenfolge konnte nicht gespeichert werden:', err);
+        return;
+    }
     ladeUndRendereAktiveListe();
 }
 
@@ -1028,16 +1249,19 @@ function eigenerFilmRunter(listeId, filmId) { eigenerFilmVerschieben(listeId, fi
 
 // Für Drag & Drop auf Desktop: übernimmt eine komplett neue Reihenfolge
 // (Liste von Film-IDs).
-function eigeneListeFilmeUmordnen(listeId, neueReihenfolgeIds) {
-    const eigeneListen = eigeneListenLesen();
-    const eintrag = eigeneListen.find(l => l.id === listeId);
-    if (!eintrag) return;
-    const nachId = Object.fromEntries(eintrag.filme.map(f => [f.id, f]));
+async function eigeneListeFilmeUmordnen(listeId, neueReihenfolgeIds) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return;
+    if (eigeneListeSperrgrund(liste)) return;
+    const nachId = Object.fromEntries(liste.filme.map(f => [f.id, f]));
     const neu = neueReihenfolgeIds.map(id => nachId[id]).filter(Boolean);
-    if (neu.length !== eintrag.filme.length) return; // Sicherheitsnetz bei Inkonsistenz
-    eintrag.filme = neu;
-    eigeneListenSchreiben(eigeneListen);
-    listenKatalogNeuAufbauen();
+    if (neu.length !== liste.filme.length) return; // Sicherheitsnetz bei Inkonsistenz
+    liste.filme = neu;
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        console.warn('Reihenfolge konnte nicht gespeichert werden:', err);
+    }
 }
 
 function eigeneKarteDragStart(event, filmId) {
@@ -1049,7 +1273,7 @@ function eigeneKarteDragOver(event) {
     event.preventDefault(); // notwendig, damit "drop" überhaupt feuert
 }
 
-function eigeneKarteDrop(event, zielFilmId, listeId) {
+async function eigeneKarteDrop(event, zielFilmId, listeId) {
     event.preventDefault();
     if (!ziehenderFilmId || ziehenderFilmId === zielFilmId) return;
 
@@ -1060,8 +1284,11 @@ function eigeneKarteDrop(event, zielFilmId, listeId) {
     if (vonIndex === -1 || zielIndex === -1) return;
 
     ids.splice(zielIndex, 0, ids.splice(vonIndex, 1)[0]);
-    eigeneListeFilmeUmordnen(listeId, ids);
     ziehenderFilmId = null;
+    // Bei Konto-Listen ist das Umordnen ein echter Firestore-Schreibzugriff -
+    // erst nach dessen Abschluss neu rendern, sonst würde die Karte kurz auf
+    // die alte Reihenfolge zurückspringen (Cache noch nicht aktualisiert).
+    await eigeneListeFilmeUmordnen(listeId, ids);
     ladeUndRendereAktiveListe();
 }
 
@@ -1112,7 +1339,13 @@ async function eigenerFilmAbsenden(listeId) {
 
 // Werkzeugleiste oberhalb der Filmkarten einer aktiven eigenen Liste:
 // Film hinzufügen (mit Wahl der Beschreibungsquelle) und Sortier-Modus.
+// Konto-Listen ohne Anmeldung/Internetverbindung sind nur lesbar - siehe
+// eigeneListeSperrgrund (Issue #37).
 function renderEigeneListeWerkzeuge(eigeneListe) {
+    if (!eigeneListe.bearbeitbar) {
+        return `<p class="eigene-hinweis eigene-gesperrt">🔒 ${escapeHtml(eigeneListe.sperrgrund)}</p>`;
+    }
+
     const limitErreicht = eigeneListe.filme.length >= EIGENE_LISTE_FILME_MAX;
 
     const formular = eigenerFormularOffen ? `
@@ -1151,8 +1384,12 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
 // Baut eine Filmkarte für eine eigene Liste: dieselbe Karte wie bei
 // kuratierten Listen (renderMovieCard), ergänzt um Entfernen-Button und,
 // im Sortier-Modus, Drag&Drop (Desktop) bzw. Pfeiltasten (Mobile) -
-// Umschaltpunkt ist dieselbe 768px-Grenze wie im responsiven CSS.
-function renderEigenerFilmCard(movie, listeId, index, gesamt) {
+// Umschaltpunkt ist dieselbe 768px-Grenze wie im responsiven CSS. Ist die
+// Liste nicht bearbeitbar (Konto-Liste ohne Anmeldung/Internet), gibt es
+// gar keine Steuerelemente - ganz normale Karte wie bei kuratierten Listen.
+function renderEigenerFilmCard(movie, listeId, index, gesamt, bearbeitbar) {
+    if (!bearbeitbar) return renderMovieCard(movie);
+
     const mobile = window.matchMedia('(max-width: 768px)').matches;
     const ziehbar = sortierModusAktiv && !mobile;
 
