@@ -64,14 +64,13 @@ function renderNav() {
     const nav = document.getElementById('mobileNav');
     const closeButton = `<button class="nav-close" aria-label="Menü schließen">✕</button>`;
     const homeLink = `<a href="#top" class="nav-home" data-fill-key="nav-home" aria-label="Zur Startseite"><span class="nav-home-icon">🏠</span> Home <span class="nav-progress" data-progress-key="nav-home"></span></a>`;
-    // Home und Listen bilden zusammen den "wo bin ich"-Block (welche
-    // Filmreihe wird gerade angezeigt) - abgesetzt vom Konto/Gruppen-
-    // Block und von den Sektionen der aktiven Liste.
-    const listenLink = `<a href="#" class="nav-listen" data-nav-listen title="Filmreihe wechseln"><span class="nav-listen-icon">📚</span> ${escapeHtml(listeNavLabel())}</a>`;
-    // Konto und Gruppen bilden zusammen einen Block, abgesetzt von Home
-    // und von den Sektionen (Logik jeweils in groups.js).
+    // Konto, Gruppen und Listen bilden zusammen einen Block, abgesetzt von
+    // Home und von den Sektionen der aktiven Liste (Konto/Gruppen-Logik in
+    // groups.js). Listen steht bewusst zuletzt in diesem Block, direkt vor
+    // den Sektionen der aktiven Liste, die sie betrifft.
     const kontoLink = `<a href="#" class="nav-konto" data-nav-konto title="Konto verwalten"><span class="nav-konto-icon">👤</span> ${escapeHtml(kontoNavLabel())}</a>`;
     const groupLink = `<a href="#" class="nav-groups" data-nav-groups title="Gruppen verwalten"><span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}</a>`;
+    const listenLink = `<a href="#" class="nav-listen" data-nav-listen title="Filmreihe wechseln"><span class="nav-listen-icon">📚</span> ${escapeHtml(listeNavLabel())}</a>`;
     // Auf Desktop senkrechter Strich, auf Mobil waagerechte Linie (siehe CSS)
     const trenner = `<span class="nav-trenner" aria-hidden="true"></span>`;
     // Eigene Listen bestehen aus genau einer Sektion mit der technischen
@@ -80,7 +79,7 @@ function renderNav() {
     const links = MOVIE_DATA.filter(section => section.id !== 'inhalt').map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
-    nav.innerHTML = closeButton + homeLink + listenLink + trenner + kontoLink + groupLink + trenner + links;
+    nav.innerHTML = closeButton + homeLink + trenner + kontoLink + groupLink + listenLink + trenner + links;
 
     // Klick-Handler per addEventListener statt Inline-onclick binden.
     // Robuster als String-Interpolation in onclick-Attributen, da so
