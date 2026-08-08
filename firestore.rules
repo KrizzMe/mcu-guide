@@ -1,0 +1,217 @@
+rules_version = '2';
+
+// Diese Datei ist die versionierte Kopie der Regeln aus der Firebase
+// Console (Projekt "mcuguide"). Bis Issue #37 lagen die Regeln
+// ausschließlich in der Console, ohne lokale Kopie - das war eine
+// Lücke in der bisherigen Arbeitsweise. Änderungen hier müssen weiterhin
+// manuell in der Firebase Console übernommen werden (kein automatisches
+// Deployment aus diesem Repo).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Hilfsfunktionen ----------
+
+    function istAngemeldet() {
+      return request.auth != null;
+    }
+
+    // Anonyme Anmeldung reicht zum Beitreten, aber NICHT zum Anlegen
+    // einer Gruppe oder einer kontogebundenen Liste - dafür ist eine
+    // echte Anmeldung nötig.
+    function istEchtAngemeldet() {
+      return istAngemeldet()
+             && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function gruppe(gid) {
+      return get(/databases/$(database)/documents/groups/$(gid)).data;
+    }
+
+    // Diese Regeln laufen serverseitig und dürfen das private Dokument
+    // lesen, auch wenn der anfragende Client das nicht darf.
+    function geheimnis(gid) {
+      return get(/databases/$(database)/documents/groups/$(gid)/private/config).data;
+    }
+
+    function istMitglied(gid) {
+      return istAngemeldet()
+             && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+
+    function istAdmin(gid) {
+      return istAngemeldet() && gruppe(gid).adminUid == request.auth.uid;
+    }
+
+    function unterGruppenLimit() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupCount < 20;
+    }
+
+    // Weiches Limit wie unterGruppenLimit() - der Zähler wird von der App
+    // gepflegt (siehe listenCount in app.js/groups.js) und ist genauso
+    // wenig manipulationssicher wie das Gruppen-Limit. Als Schutz gegen
+    // versehentliche Massenanlage akzeptiert, da eine kontogebundene
+    // Liste ohnehin eine echte Anmeldung voraussetzt (Issue #37).
+    function unterListenLimit(uid) {
+      return !exists(/databases/$(database)/documents/users/$(uid))
+             || get(/databases/$(database)/documents/users/$(uid)).data.listenCount < 10;
+    }
+
+    // Prüft, dass ausschließlich die angegebenen Felder geändert wurden.
+    function nurFelderGeaendert(felder) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(felder);
+    }
+
+    // Ein gültiges Übergabe-Dokument für den Wiedereinstieg nach
+    // einem Gerätewechsel.
+    function anspruchExistiert(gid, code) {
+      return code is string
+             && exists(/databases/$(database)/documents/groups/$(gid)/claims/$(code));
+    }
+
+    // Gemeinsame Feldprüfung für kontogebundene eigene Listen - beim
+    // Anlegen UND beim Ändern dieselben Grenzen wie lokal (Issue #35):
+    // Kurzname max. 15, Langname max. 40, max. 50 Filme je Liste.
+    function gueltigeListenDaten() {
+      return request.resource.data.kurzname is string
+             && request.resource.data.kurzname.size() > 0
+             && request.resource.data.kurzname.size() <= 15
+             && request.resource.data.name is string
+             && request.resource.data.name.size() > 0
+             && request.resource.data.name.size() <= 40
+             && request.resource.data.filme is list
+             && request.resource.data.filme.size() <= 50;
+    }
+
+    // ---------- Nutzer ----------
+
+    match /users/{uid} {
+      allow read, write: if istAngemeldet() && request.auth.uid == uid;
+
+      // ---------- Eigene Listen, kontogebunden (Relaunch Stufe 3) ----------
+      // Anders als bei Gruppen gibt es hier (noch) kein Teilen zwischen
+      // Nutzern - jede Liste ist ausschließlich für den eigenen Account
+      // les- und schreibbar. Teilen kommt erst in einer späteren Stufe.
+      match /listen/{listeId} {
+        allow read: if istAngemeldet() && request.auth.uid == uid;
+
+        allow create: if istEchtAngemeldet()
+                      && request.auth.uid == uid
+                      && unterListenLimit(uid)
+                      && gueltigeListenDaten();
+
+        // Umbenennen, Filme hinzufügen/entfernen/umsortieren laufen alle
+        // über dasselbe update - die Feldgrenzen gelten unverändert,
+        // das Limit wird aber bewusst nur beim Anlegen geprüft (eine
+        // bereits bestehende Liste darf man weiter bearbeiten, auch
+        // falls das Limit zwischenzeitlich erreicht wurde).
+        allow update: if istEchtAngemeldet()
+                      && request.auth.uid == uid
+                      && gueltigeListenDaten();
+
+        allow delete: if istEchtAngemeldet() && request.auth.uid == uid;
+      }
+    }
+
+    // ---------- Gruppen ----------
+
+    match /groups/{gid} {
+
+      // Eckdaten (Name, Sperrstatus) darf jeder Angemeldete lesen, der die
+      // groupId kennt - nötig, damit Eingeladene die Gruppe sehen können,
+      // bevor sie beitreten. Enthält bewusst kein Geheimnis.
+      allow get: if istAngemeldet();
+
+      // Auflisten nur der eigenen Gruppen (Abfrage muss nach adminUid filtern).
+      allow list: if istAngemeldet() && resource.data.adminUid == request.auth.uid;
+
+      allow create: if istEchtAngemeldet()
+                    && unterGruppenLimit()
+                    && request.resource.data.adminUid == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 60
+                    && request.resource.data.locked == false;
+
+      // Admin darf sperren/entsperren und umbenennen. Die Admin-Rolle
+      // darf er abgeben, aber nur an jemanden, der bereits Mitglied ist -
+      // sonst könnte eine Gruppe an eine fremde Kennung verschenkt werden.
+      allow update: if istAdmin(gid)
+                    && (
+                         request.resource.data.adminUid == resource.data.adminUid
+                         || exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.resource.data.adminUid))
+                       );
+
+      allow delete: if istAdmin(gid);
+
+      // ---------- Einladungscode (nur Admin) ----------
+
+      match /private/{docId} {
+        allow read, write: if istAdmin(gid);
+      }
+
+      // ---------- Übergabe-Dokumente für den Wiedereinstieg ----------
+      // Enthalten Name und Bewertungen eines Mitglieds, das sein Gerät
+      // gewechselt hat. Der Dokumentname IST das Geheimnis (langer
+      // Zufallscode im Wiedereinstiegs-Link).
+
+      match /claims/{claimCode} {
+        // Wer den Code kennt, darf das Dokument lesen und nach dem
+        // Einlösen aufräumen. Auflisten darf nur der Admin - sonst
+        // ließen sich die Codes durchsuchen.
+        allow get: if istAngemeldet();
+        allow list: if istAdmin(gid);
+        allow create, update: if istAdmin(gid);
+        allow delete: if istAngemeldet();
+      }
+
+      // ---------- Mitglieder samt Bewertungen ----------
+
+      match /members/{uid} {
+
+        // Nur wer selbst in dieser Gruppe ist, sieht die Bewertungen der
+        // anderen. Der Admin darf ebenfalls lesen (Verwaltung).
+        allow read: if istMitglied(gid) || istAdmin(gid);
+
+        // Zwei Wege herein:
+        // 1. Normaler Beitritt mit gültigem Einladungscode, Gruppe offen
+        // 2. Wiedereinstieg mit gültigem Übergabe-Code - der funktioniert
+        //    bewusst auch bei gesperrter Gruppe, denn genau dann braucht
+        //    man ihn (Familie vollzählig, jemand wechselt das Handy).
+        allow create: if istAngemeldet()
+                      && request.auth.uid == uid
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0
+                      && request.resource.data.name.size() <= 40
+                      && (
+                           (
+                             gruppe(gid).locked == false
+                             && request.resource.data.inviteCode == geheimnis(gid).inviteCode
+                           )
+                           || anspruchExistiert(gid, request.resource.data.claimCode)
+                         );
+
+        // Eigene Bewertungen ändern: nur das eigene Dokument, und der
+        // Einladungscode darf nachträglich nicht verändert werden.
+        // Der Admin darf zusätzlich den Anzeigenamen korrigieren -
+        // aber ausschließlich diesen, keine Bewertungen.
+        allow update: if (
+                          istAngemeldet()
+                          && request.auth.uid == uid
+                          && request.resource.data.inviteCode == resource.data.inviteCode
+                        )
+                        || ( istAdmin(gid) && nurFelderGeaendert(['name']) );
+
+        // Austreten (selbst) oder entfernt werden (durch Admin).
+        allow delete: if (istAngemeldet() && request.auth.uid == uid) || istAdmin(gid);
+      }
+    }
+
+    // ---------- Alles Übrige bleibt gesperrt ----------
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

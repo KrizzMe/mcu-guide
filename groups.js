@@ -1438,6 +1438,144 @@ function abschnittLoeschenFinal() {
         <button class="gruppen-btn grau" data-aktion="loeschen-abbrechen">Abbrechen</button>`;
 }
 
+// --- Eigene Listen kontogebunden (Relaunch Stufe 3, Issue #37) ---
+// Bewusste Abweichung vom sonstigen Grundsatz "lokal ist führend"
+// (siehe Bewertungen): Für kontogebundene Listen ist Firestore die
+// führende Quelle, localStorage dient nur noch als Anzeige-Cache
+// (mcu-konto-listen-cache in app.js). Deshalb auch KEINE Warteschlange
+// wie bei Bewertungen - Bearbeiten setzt eine Internetverbindung voraus,
+// offline bleibt eine Konto-Liste bewusst nur lesbar (siehe
+// eigeneListeSperrgrund in app.js).
+
+async function kontoListenLaden() {
+    if (!istEchtAngemeldet()) return;
+    try {
+        const schnappschuss = await getDocs(collection(db, 'users', aktuellerNutzer.uid, 'listen'));
+        const listen = schnappschuss.docs.map(d => ({
+            id: d.id,
+            kurzname: d.data().kurzname,
+            name: d.data().name,
+            filme: d.data().filme || []
+        }));
+        if (typeof window.kontoListenCacheSetzen === 'function') {
+            window.kontoListenCacheSetzen(listen);
+        }
+    } catch (err) {
+        console.warn('Konto-Listen konnten nicht geladen werden:', err);
+    }
+}
+
+// Legt eine neue kontogebundene Liste an (Formular ODER automatischer
+// Login-Abgleich) - inklusive des weichen Zähler-Limits, siehe
+// unterListenLimit() in firestore.rules.
+async function kontoListeAnlegen(liste) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await setDoc(doc(db, 'users', aktuellerNutzer.uid, 'listen', liste.id), {
+        kurzname: liste.kurzname,
+        name: liste.name,
+        filme: liste.filme
+    });
+    await setDoc(doc(db, 'users', aktuellerNutzer.uid),
+                 { listenCount: increment(1) }, { merge: true });
+    if (typeof window.kontoListenCacheAktualisieren === 'function') {
+        window.kontoListenCacheAktualisieren(liste);
+    }
+}
+
+// Speichert Änderungen an einer bereits bestehenden kontogebundenen
+// Liste (umbenennen, Filme hinzufügen/entfernen/umsortieren - siehe
+// eigeneListePersistieren in app.js, das diese Funktion aufruft).
+async function kontoListeSpeichern(liste) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await setDoc(doc(db, 'users', aktuellerNutzer.uid, 'listen', liste.id), {
+        kurzname: liste.kurzname,
+        name: liste.name,
+        filme: liste.filme
+    });
+    if (typeof window.kontoListenCacheAktualisieren === 'function') {
+        window.kontoListenCacheAktualisieren(liste);
+    }
+}
+
+async function kontoListeLoeschen(listeId) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await deleteDoc(doc(db, 'users', aktuellerNutzer.uid, 'listen', listeId));
+    await setDoc(doc(db, 'users', aktuellerNutzer.uid),
+                 { listenCount: increment(-1) }, { merge: true });
+    if (typeof window.kontoListenCacheEntfernen === 'function') {
+        window.kontoListenCacheEntfernen(listeId);
+    }
+}
+
+// Kandidaten für den Login-Abgleich (siehe listenAbgleichVorschlag in
+// app.js) - null, solange keine Entscheidung ansteht.
+let abgleichKandidaten = null;
+let abgleichPlatzFrei = 0;
+
+// Wird nach jedem Laden der Konto-Listen aufgerufen (Login UND jeder
+// spätere Seitenaufruf als angemeldeter Nutzer). Lädt konfliktfreie
+// lokale Listen automatisch hoch; bei Namenskollision oder wenn das
+// 10er-Limit überschritten würde, entscheidet der Nutzer im
+// "listen-abgleich"-Fenster (Antworten zu Issue #37).
+async function kontoListenSynchronisieren() {
+    await kontoListenLaden();
+    if (typeof window.listenAbgleichVorschlag !== 'function') return;
+
+    const vorschlag = window.listenAbgleichVorschlag();
+    if (vorschlag.kandidaten.length === 0) return;
+
+    if (vorschlag.automatischMoeglich) {
+        const uploads = vorschlag.kandidaten.map(k => ({ id: k.id, kurzname: k.kurzname, name: k.name }));
+        const anzahl = await window.listenAbgleichUebernehmen(uploads);
+        if (anzahl > 0) {
+            meldung(anzahl + ' eigene Liste(n) wurden mit deinem Konto synchronisiert.');
+            if (typeof window.onAktiveListeGeaendert === 'function') window.onAktiveListeGeaendert();
+        }
+        zeichneFenster();
+    } else {
+        abgleichKandidaten = vorschlag.kandidaten;
+        abgleichPlatzFrei = vorschlag.platzFrei;
+        fensterOeffnen('listen-abgleich');
+    }
+}
+
+// Baut das Abgleich-Fenster: pro lokaler Liste eine Checkbox, bei
+// Namenskollision zusätzlich Eingabefelder zum Anpassen des Namens -
+// erst nach Auflösung der Kollision lässt sich die Liste übernehmen.
+function abschnittListenAbgleich() {
+    if (!abgleichKandidaten || abgleichKandidaten.length === 0) {
+        return '<p class="gruppen-hinweis">Keine lokalen Listen zum Abgleichen.</p>';
+    }
+
+    const zeilen = abgleichKandidaten.map(k => `
+        <div class="mitglied-zeile">
+            <label class="gruppen-check">
+                <input type="checkbox" class="abgleich-checkbox" data-liste-id="${k.id}" ${k.kollision ? '' : 'checked'}>
+                <strong>${sicher(k.kurzname)}</strong> - ${sicher(k.name)} (${k.anzahlFilme} Film(e))
+            </label>
+            ${k.kollision ? `
+            <p class="eigene-hinweis">⚠️ Diesen Namen gibt es in deinem Konto schon - bitte anpassen, um diese Liste zu übernehmen:</p>
+            <div class="gruppen-zeile">
+                <input type="text" id="abgleich-kurzname-${k.id}" value="${sicher(k.kurzname)}" placeholder="Neuer Kurzname" maxlength="15">
+            </div>
+            <div class="gruppen-zeile">
+                <input type="text" id="abgleich-name-${k.id}" value="${sicher(k.name)}" placeholder="Neuer Langname" maxlength="40">
+            </div>` : ''}
+        </div>`).join('');
+
+    return `
+        <p class="gruppen-hinweis">
+            Du hast lokale Listen auf diesem Gerät, die noch nicht mit deinem
+            Konto synchronisiert sind. Dein Konto hat noch Platz für
+            ${abgleichPlatzFrei} weitere Liste(n) (maximal 10 insgesamt).
+            Wähle aus, welche du übernehmen möchtest.
+        </p>
+        ${zeilen}
+        <div id="abgleich-fehler" class="eigene-fehler" style="display:none;"></div>
+        <button class="gruppen-btn" data-aktion="abgleich-uebernehmen">Ausgewählte Listen übernehmen</button>
+        <button class="gruppen-btn grau" data-aktion="abgleich-verwerfen">Später (Listen bleiben vorerst lokal)</button>`;
+}
+
 // --- Filmreihen wechseln (Relaunch Stufe 1) ---
 // Die eigentliche Lade-/Wechsel-Logik lebt in app.js (listeWechseln,
 // VERFUEGBARE_LISTEN) - hier nur die Anzeige im gewohnten Fenster.
@@ -1477,15 +1615,22 @@ function abschnittListen() {
         </div>`;
         }
 
-        const eigeneAktionen = l.eigene ? `
-                <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-umbenennen-start" data-liste-id="${l.id}">Umbenennen</button>
-                <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-loeschen" data-liste-id="${l.id}" data-name="${sicher(l.name)}">Löschen</button>` : '';
+        // Umbenennen/Löschen nur, solange die Liste bearbeitbar ist - eine
+        // Konto-Liste ohne Anmeldung/Internet zeigt stattdessen den Grund
+        // (siehe eigeneListeSperrgrund in app.js).
+        const eigeneAktionen = l.eigene
+            ? (l.bearbeitbar
+                ? `<button class="gruppen-btn schmal grau" data-aktion="eigene-liste-umbenennen-start" data-liste-id="${l.id}">Umbenennen</button>
+                   <button class="gruppen-btn schmal grau" data-aktion="eigene-liste-loeschen" data-liste-id="${l.id}" data-name="${sicher(l.name)}">Löschen</button>`
+                : `<p class="eigene-hinweis">🔒 ${sicher(l.sperrgrund)}</p>`)
+            : '';
 
         return `
         <div class="mitglied-zeile">
             <div class="mitglied-kopf">
                 <span class="mitglied-name">${sicher(l.name)}</span>
                 ${l.id === aktiveId ? '<span class="gruppen-status">aktiv</span>' : ''}
+                ${l.herkunft === 'konto' ? '<span class="gruppen-status">Konto</span>' : ''}
                 ${l.eigene ? `<span class="mitglied-anzahl">${l.anzahlFilme} Film(e)</span>` : ''}
             </div>
             <div class="gruppen-aktionen">
@@ -1497,16 +1642,18 @@ function abschnittListen() {
         </div>`;
     }).join('');
 
+    // Neue Listen landen automatisch im Konto, sobald man echt angemeldet
+    // und online ist (bis zu 10) - sonst rein lokal (bis zu 3), siehe
+    // eigeneListeAnlegen in app.js.
+    const kontoBereit = typeof window.istEchtAngemeldet === 'function' && window.istEchtAngemeldet();
+    const maxKonto = typeof window.getKontoListenMax === 'function' ? window.getKontoListenMax() : 10;
+    const anzahlKonto = typeof window.getKontoListenAnzahl === 'function' ? window.getKontoListenAnzahl() : 0;
     const anzahlEigene = typeof window.getEigeneListenAnzahl === 'function' ? window.getEigeneListenAnzahl() : 0;
     const maxEigene = typeof window.getEigeneListenMax === 'function' ? window.getEigeneListenMax() : 3;
 
-    const anlegenBereich = anzahlEigene >= maxEigene ? `
-        <p class="gruppen-hinweis">
-            Du hast bereits ${maxEigene} eigene Listen angelegt - mehr geht aktuell
-            nur mit einem Konto (kommt in einer späteren Ausbaustufe).
-        </p>` : `
+    const anlegenFormular = (untertitel) => `
         <div class="gruppen-anlegen">
-            <div class="gruppen-untertitel">Eigene Liste anlegen</div>
+            <div class="gruppen-untertitel">${untertitel}</div>
             <div class="gruppen-zeile">
                 <input type="text" id="neue-liste-kurzname" placeholder="Kurzname für die Navigation, z. B. Favoriten" maxlength="15">
             </div>
@@ -1515,6 +1662,17 @@ function abschnittListen() {
             </div>
             <button class="gruppen-btn" data-aktion="eigene-liste-anlegen">Liste anlegen</button>
         </div>`;
+
+    let anlegenBereich;
+    if (kontoBereit) {
+        anlegenBereich = anzahlKonto >= maxKonto
+            ? `<p class="gruppen-hinweis">Du hast bereits ${maxKonto} Listen in deinem Konto gespeichert - bitte erst eine löschen, um Platz für eine neue zu schaffen.</p>`
+            : anlegenFormular('Eigene Liste anlegen (wird mit deinem Konto gespeichert)');
+    } else {
+        anlegenBereich = anzahlEigene >= maxEigene
+            ? `<p class="gruppen-hinweis">Du hast bereits ${maxEigene} eigene Listen angelegt - mehr geht mit einer Anmeldung (bis zu ${maxKonto}).</p>`
+            : anlegenFormular('Eigene Liste anlegen');
+    }
 
     return `
         <p class="gruppen-hinweis">
@@ -1739,6 +1897,12 @@ function zeichneFenster() {
         return;
     }
 
+    if (ansicht === 'listen-abgleich') {
+        if (titelEl) titelEl.textContent = 'Eigene Listen mit Konto abgleichen';
+        inhalt.innerHTML = abschnittListenAbgleich();
+        return;
+    }
+
     if (ansicht === 'infos') {
         if (titelEl) titelEl.textContent = 'Infos zum Fan Guide';
         inhalt.innerHTML = abschnittInfos();
@@ -1863,17 +2027,20 @@ function fensterKlicks(event) {
         }
     }
 
-    // Eigene Listen (Relaunch Stufe 2)
+    // Eigene Listen (Relaunch Stufe 2 + 3) - anlegen/umbenennen/löschen
+    // sind seit der Kontoanbindung (Issue #37) asynchron, da sie bei
+    // angemeldeten, online Nutzern über Firestore laufen können.
     if (aktion === 'eigene-liste-anlegen') {
         const kurzname = document.getElementById('neue-liste-kurzname')?.value || '';
         const name = document.getElementById('neue-liste-name')?.value || '';
-        const ergebnis = window.eigeneListeAnlegen(kurzname, name);
-        if (!ergebnis.ok) {
-            meldung(ergebnis.fehler, true);
-        } else {
-            meldungLeeren();
-            zeichneFenster();
-        }
+        window.eigeneListeAnlegen(kurzname, name).then(ergebnis => {
+            if (!ergebnis.ok) {
+                meldung(ergebnis.fehler, true);
+            } else {
+                meldungLeeren();
+                zeichneFenster();
+            }
+        });
     }
     if (aktion === 'eigene-liste-umbenennen-start') {
         eigeneListeBearbeitungId = ziel.dataset.listeId;
@@ -1888,14 +2055,15 @@ function fensterKlicks(event) {
         const bearbeiteteId = ziel.dataset.listeId;
         const kurzname = document.getElementById('eigene-liste-kurzname-' + bearbeiteteId)?.value || '';
         const name = document.getElementById('eigene-liste-name-' + bearbeiteteId)?.value || '';
-        const ergebnis = window.eigeneListeUmbenennen(bearbeiteteId, kurzname, name);
-        if (!ergebnis.ok) {
-            meldung(ergebnis.fehler, true);
-        } else {
-            eigeneListeBearbeitungId = null;
-            meldungLeeren();
-            zeichneFenster();
-        }
+        window.eigeneListeUmbenennen(bearbeiteteId, kurzname, name).then(ergebnis => {
+            if (!ergebnis.ok) {
+                meldung(ergebnis.fehler, true);
+            } else {
+                eigeneListeBearbeitungId = null;
+                meldungLeeren();
+                zeichneFenster();
+            }
+        });
     }
     if (aktion === 'eigene-liste-loeschen') {
         const listeId = ziel.dataset.listeId;
@@ -1907,7 +2075,63 @@ function fensterKlicks(event) {
             'Listen vorkommen.'
         );
         if (!bestaetigt) return;
-        window.eigeneListeLoeschen(listeId).then(zeichneFenster);
+        window.eigeneListeLoeschen(listeId).then(ergebnis => {
+            if (!ergebnis.ok) meldung(ergebnis.fehler, true);
+            zeichneFenster();
+        });
+    }
+
+    // Login-Abgleich lokaler Listen mit dem Konto (Relaunch Stufe 3)
+    if (aktion === 'abgleich-uebernehmen') {
+        const checkboxen = Array.from(document.querySelectorAll('.abgleich-checkbox:checked'));
+        const uploads = [];
+        let fehlertext = null;
+
+        for (const box of checkboxen) {
+            const listeId = box.dataset.listeId;
+            const kandidat = abgleichKandidaten.find(k => k.id === listeId);
+            if (!kandidat) continue;
+
+            let kurzname = kandidat.kurzname;
+            let name = kandidat.name;
+            if (kandidat.kollision) {
+                kurzname = (document.getElementById('abgleich-kurzname-' + listeId)?.value || '').trim();
+                name = (document.getElementById('abgleich-name-' + listeId)?.value || '').trim();
+                if (kurzname.toLowerCase() === kandidat.kurzname.toLowerCase()
+                    || name.toLowerCase() === kandidat.name.toLowerCase()) {
+                    fehlertext = `Für "${kandidat.kurzname}" bitte einen wirklich neuen Namen eintragen, um die Kollision aufzulösen.`;
+                    break;
+                }
+            }
+            uploads.push({ id: listeId, kurzname, name });
+        }
+
+        if (fehlertext) {
+            const fehlerEl = document.getElementById('abgleich-fehler');
+            if (fehlerEl) { fehlerEl.textContent = fehlertext; fehlerEl.style.display = 'block'; }
+            return;
+        }
+        if (uploads.length > abgleichPlatzFrei) {
+            const fehlerEl = document.getElementById('abgleich-fehler');
+            if (fehlerEl) {
+                fehlerEl.textContent = `Nur ${abgleichPlatzFrei} freie Plätze im Konto - bitte weniger Listen auswählen.`;
+                fehlerEl.style.display = 'block';
+            }
+            return;
+        }
+
+        window.listenAbgleichUebernehmen(uploads).then(anzahl => {
+            abgleichKandidaten = null;
+            meldung(anzahl + ' Liste(n) wurden mit deinem Konto synchronisiert.');
+            ansicht = 'listen';
+            zeichneFenster();
+            if (typeof window.onAktiveListeGeaendert === 'function') window.onAktiveListeGeaendert();
+        });
+    }
+    if (aktion === 'abgleich-verwerfen') {
+        abgleichKandidaten = null;
+        ansicht = 'listen';
+        zeichneFenster();
     }
 
     // Datenschutzhinweise (Issue #22)
@@ -1980,9 +2204,16 @@ onAuthStateChanged(auth, async nutzer => {
         ladeVorgang = true;
         zeichneFenster();
         await eigeneGruppenLaden();
+        await kontoListenSynchronisieren();
         ladeVorgang = false;
     }
     zeichneFenster();
+    // Konto-Listen können durch Login/Logout bearbeitbar geworden oder
+    // gesperrt worden sein - Inhaltsseite (nicht nur das Fenster) neu
+    // aufbauen, damit das sofort sichtbar ist.
+    if (typeof window.ladeUndRendereAktiveListe === 'function') {
+        window.ladeUndRendereAktiveListe();
+    }
 });
 
 anmeldungAusLinkAbschliessen();
@@ -1998,6 +2229,16 @@ if (aktiveGruppeId()) {
 // Kommt die Verbindung zurück, werden gemerkte Änderungen nachgereicht.
 window.addEventListener('online', () => {
     warteschlangeAbarbeiten().then(() => gruppeAbgleichen()).then(zeichneFenster);
+    // Konto-Listen sind offline nur lesbar (Issue #37) - Inhaltsseite neu
+    // aufbauen, damit die Bearbeitung sofort wieder freigeschaltet wird,
+    // ohne dass der Nutzer erst die Liste wechseln muss.
+    if (typeof window.ladeUndRendereAktiveListe === 'function') window.ladeUndRendereAktiveListe();
+});
+
+// Umgekehrt beim Verbindungsverlust sofort sperren, statt erst beim
+// nächsten Bearbeitungsversuch zu scheitern.
+window.addEventListener('offline', () => {
+    if (typeof window.ladeUndRendereAktiveListe === 'function') window.ladeUndRendereAktiveListe();
 });
 
 // Für andere Dateien erreichbar machen
@@ -2016,6 +2257,12 @@ window.closeGroupPanel      = schliesseGruppenFenster;
 window.getKontoLabel        = () => (istEchtAngemeldet() ? 'Mein Profil' : 'Login');
 window.getAktiveGruppe      = aktiveGruppeId;
 window.getAktiveGruppeName  = aktiveGruppeName;
+// Eigene Listen, kontogebunden (Issue #37) - app.js prüft darüber, ob
+// eine Konto-Liste bearbeitet werden darf (siehe eigeneListeSperrgrund).
+window.istEchtAngemeldet    = istEchtAngemeldet;
+window.kontoListeAnlegen    = kontoListeAnlegen;
+window.kontoListeSpeichern  = kontoListeSpeichern;
+window.kontoListeLoeschen   = kontoListeLoeschen;
 window.onRatingChanged      = bewertungHochladen;
 window.getEigeneUid         = () => (aktuellerNutzer ? aktuellerNutzer.uid : null);
 
