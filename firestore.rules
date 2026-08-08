@@ -43,9 +43,15 @@ service cloud.firestore {
       return istAngemeldet() && gruppe(gid).adminUid == request.auth.uid;
     }
 
+    // .data.get(feld, standard) statt .data.feld: beide Zähler teilen
+    // sich seit Issue #37 dasselbe users/{uid}-Dokument. Wessen Dokument
+    // z. B. nur durch listenCount entstanden ist, hat kein groupCount-
+    // Feld - ein direkter Zugriff darauf wäre ein Auswertungsfehler und
+    // würde die Regel (und damit z. B. das Gruppe-Anlegen) fälschlich
+    // komplett blockieren, statt das fehlende Feld als 0 zu behandeln.
     function unterGruppenLimit() {
       return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupCount < 20;
+             || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('groupCount', 0) < 20;
     }
 
     // Weiches Limit wie unterGruppenLimit() - der Zähler wird von der App
@@ -55,7 +61,7 @@ service cloud.firestore {
     // Liste ohnehin eine echte Anmeldung voraussetzt (Issue #37).
     function unterListenLimit(uid) {
       return !exists(/databases/$(database)/documents/users/$(uid))
-             || get(/databases/$(database)/documents/users/$(uid)).data.listenCount < 10;
+             || get(/databases/$(database)/documents/users/$(uid)).data.get('listenCount', 0) < 10;
     }
 
     // Prüft, dass ausschließlich die angegebenen Felder geändert wurden.
