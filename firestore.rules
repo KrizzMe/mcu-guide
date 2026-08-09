@@ -184,6 +184,31 @@ service cloud.firestore {
         allow read, write: if istAdmin(gid);
       }
 
+      // ---------- Zeiger auf geteilte Listen (Relaunch Stufe 4, Issue #39) ----------
+      // Reines Auffinden geteilter Listen dieser Gruppe - der eigentliche
+      // Lesezugriff auf den Listeninhalt wird unabhängig davon direkt bei
+      // users/{uid}/listen/{listeId} geprüft (siehe oben). Diese Zeiger-
+      // Unterkollektion existiert, weil Firestore-Regeln exists()-
+      // Prüfungen für Collection-Group-Abfragen über Sammlungsgrenzen
+      // hinweg nicht zuverlässig unterstützen (in der Praxis mit
+      // "permission-denied" gescheitert) - eine auf eine bekannte,
+      // einzelne Gruppe beschränkte Abfrage wie hier funktioniert dagegen
+      // genau wie bei den bestehenden Mitgliedern.
+      match /geteilteListen/{eintragId} {
+        allow read: if istMitglied(gid) || istAdmin(gid);
+
+        allow create: if istEchtAngemeldet()
+                      && istMitglied(gid)
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.resource.data.listeId is string;
+
+        // Der Ersteller beendet sein eigenes Teilen; der Admin darf einen
+        // Zeiger zusätzlich entfernen (z. B. wenn der Ersteller die
+        // Gruppe inzwischen verlassen hat).
+        allow delete: if istEchtAngemeldet()
+                      && (resource.data.ownerUid == request.auth.uid || istAdmin(gid));
+      }
+
       // ---------- Übergabe-Dokumente für den Wiedereinstieg ----------
       // Enthalten Name und Bewertungen eines Mitglieds, das sein Gerät
       // gewechselt hat. Der Dokumentname IST das Geheimnis (langer

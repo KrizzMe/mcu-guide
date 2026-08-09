@@ -24,7 +24,7 @@ import {
     sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 import {
-    getFirestore, doc, collection, collectionGroup, setDoc, getDoc, getDocs,
+    getFirestore, doc, collection, setDoc, getDoc, getDocs,
     deleteDoc, updateDoc, query, where, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
@@ -1527,18 +1527,51 @@ async function kontoListeLoeschen(listeId) {
 }
 
 // --- Eigene Listen mit Gruppen teilen (Relaunch Stufe 4, Issue #39) ---
-// Teilen/Beenden selbst läuft über dieselbe kontoListeSpeichern()-Funktion
-// oben (schreibt nur das zusätzliche Feld geteiltInGruppen) - hier nur
-// das Auffinden geteilter Listen ANDERER Mitglieder. Bewusst KEIN
-// dauerhafter Echtzeit-Draht (onSnapshot), sondern einmaliges Laden bei
-// Login und beim Öffnen des "Filmreihe wählen"-Fensters (siehe
-// fensterOeffnen), plus ein gezieltes Neuladen der jeweils aktiven
-// Liste beim Wechseln zu ihr (siehe app.js: ladeUndRendereAktiveListe).
+// Der eigentliche Lesezugriff auf eine geteilte Liste läuft weiterhin
+// direkt über users/{uid}/listen/{listeId} (geprüft via
+// istMitgliedEinerDieserGruppen in firestore.rules - das funktioniert
+// nachweislich, siehe unten). Für das AUFFINDEN geteilter Listen wurde
+// ursprünglich eine Collection-Group-Abfrage über alle users/*/listen-
+// Unterkollektionen verwendet - das schlug in der Praxis mit
+// "permission-denied" fehl: Firestore-Regeln unterstützen exists()-
+// Prüfungen für Collection-Group-Abfragen über Sammlungsgrenzen hinweg
+// offenbar nicht zuverlässig (ein einzelner getDoc() auf denselben Pfad
+// mit derselben Regel funktionierte dagegen einwandfrei - siehe
+// Fehlersuche zu Issue #39). Stattdessen jetzt eine Zeiger-
+// Unterkollektion direkt bei der Gruppe (groups/{gid}/geteilteListen),
+// abgesichert genau wie die bestehende Mitgliederliste über istMitglied()
+// - dieselbe, bereits bewährte Art von Abfrage (eine bekannte, einzelne
+// Gruppe statt sammlungsübergreifend).
+//
+// Bewusst KEIN dauerhafter Echtzeit-Draht (onSnapshot), sondern
+// einmaliges Laden bei Login und beim Öffnen des "Filmreihe wählen"-
+// Fensters (siehe fensterOeffnen), plus ein gezieltes Neuladen der
+// jeweils aktiven Liste beim Wechseln zu ihr (siehe app.js:
+// ladeUndRendereAktiveListe).
+
+function zeigerId(ownerUid, listeId) {
+    return ownerUid + '_' + listeId;
+}
+
+// Legt bzw. entfernt den Zeiger, wenn eine Liste geteilt/nicht mehr
+// geteilt wird - aufgerufen von listeMitGruppeTeilen/
+// listeVonGruppeEntfernen in app.js, direkt neben der eigentlichen
+// Änderung an geteiltInGruppen.
+async function listePointerHinzufuegen(gid, ownerUid, listeId) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await setDoc(doc(db, 'groups', gid, 'geteilteListen', zeigerId(ownerUid, listeId)), { ownerUid, listeId });
+}
+window.listePointerHinzufuegen = listePointerHinzufuegen;
+
+async function listePointerEntfernen(gid, ownerUid, listeId) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await deleteDoc(doc(db, 'groups', gid, 'geteilteListen', zeigerId(ownerUid, listeId)));
+}
+window.listePointerEntfernen = listePointerEntfernen;
 
 // Sucht über alle lokal gemerkten Mitgliedschaften hinweg nach Listen,
-// die MIT MIR geteilt wurden (Collection-Group-Abfrage über alle
-// users/*/listen-Unterkollektionen). Eine Liste, die mit mehreren
-// meiner Gruppen geteilt ist, taucht dabei nur einmal auf.
+// die MIT MIR geteilt wurden. Eine Liste, die mit mehreren meiner
+// Gruppen geteilt ist, taucht dabei nur einmal auf.
 async function geteilteListenLaden() {
     const mitgliedschaften = mitgliedschaftenLesen();
     if (mitgliedschaften.length === 0) {
@@ -1550,14 +1583,19 @@ async function geteilteListenLaden() {
 
     for (const mitgliedschaft of mitgliedschaften) {
         try {
-            const treffer = await getDocs(query(
-                collectionGroup(db, 'listen'),
-                where('geteiltInGruppen', 'array-contains', mitgliedschaft.groupId)
-            ));
-            for (const eintrag of treffer.docs) {
-                const ownerUid = eintrag.ref.parent.parent.id; // users/{ownerUid}/listen/{listeId}
-                const schluessel = ownerUid + '/' + eintrag.id;
+            const zeiger = await getDocs(collection(db, 'groups', mitgliedschaft.groupId, 'geteilteListen'));
+            for (const zeigerDoc of zeiger.docs) {
+                const { ownerUid, listeId } = zeigerDoc.data();
+                const schluessel = ownerUid + '/' + listeId;
                 if (gefunden.has(schluessel)) continue;
+
+                let listeSnap;
+                try {
+                    listeSnap = await getDoc(doc(db, 'users', ownerUid, 'listen', listeId));
+                } catch (e) {
+                    continue; // z. B. zwischenzeitlich gelöscht oder nicht mehr geteilt
+                }
+                if (!listeSnap.exists()) continue;
 
                 let erstellerName = 'Unbekannt';
                 try {
@@ -1566,11 +1604,11 @@ async function geteilteListenLaden() {
                 } catch (e) { /* Name bleibt "Unbekannt" - kein Grund, deswegen abzubrechen */ }
 
                 gefunden.set(schluessel, {
-                    id: eintrag.id,
+                    id: listeId,
                     ownerUid,
-                    kurzname: eintrag.data().kurzname,
-                    name: eintrag.data().name,
-                    filme: eintrag.data().filme || [],
+                    kurzname: listeSnap.data().kurzname,
+                    name: listeSnap.data().name,
+                    filme: listeSnap.data().filme || [],
                     erstellerName
                 });
             }

@@ -959,6 +959,13 @@ async function listeMitGruppeTeilen(listeId, gid) {
     liste.geteiltInGruppen = [...bisherige, gid];
     try {
         await eigeneListePersistieren(liste);
+        // Zeiger bei der Gruppe anlegen, damit Mitglieder die Liste
+        // überhaupt finden (siehe listePointerHinzufuegen in groups.js -
+        // der eigentliche Lesezugriff läuft unabhängig davon über
+        // geteiltInGruppen auf der Liste selbst).
+        if (typeof window.listePointerHinzufuegen === 'function' && typeof window.getEigeneUid === 'function') {
+            await window.listePointerHinzufuegen(gid, window.getEigeneUid(), listeId);
+        }
     } catch (err) {
         return { ok: false, fehler: 'Teilen fehlgeschlagen: ' + (err.message || err) };
     }
@@ -974,6 +981,9 @@ async function listeVonGruppeEntfernen(listeId, gid) {
     liste.geteiltInGruppen = (liste.geteiltInGruppen || []).filter(g => g !== gid);
     try {
         await eigeneListePersistieren(liste);
+        if (typeof window.listePointerEntfernen === 'function' && typeof window.getEigeneUid === 'function') {
+            await window.listePointerEntfernen(gid, window.getEigeneUid(), listeId);
+        }
     } catch (err) {
         return { ok: false, fehler: 'Beenden des Teilens fehlgeschlagen: ' + (err.message || err) };
     }

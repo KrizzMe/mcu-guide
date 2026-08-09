@@ -421,3 +421,98 @@ test('Genau 5 geteilte Gruppen sind noch erlaubt', async () => {
         geteiltInGruppen: ['g1', 'g2', 'g3', 'g4', 'g5']
     }));
 });
+
+// ---------------------------------------------------------------------
+// Zeiger auf geteilte Listen: groups/{gid}/geteilteListen (Issue #39)
+//
+// Ersatz für die ursprünglich geplante Collection-Group-Abfrage über
+// alle users/*/listen-Unterkollektionen, die in der Praxis mit
+// "permission-denied" scheiterte (Firestore-Regeln unterstützen
+// exists()-Prüfungen für Collection-Group-Abfragen über
+// Sammlungsgrenzen hinweg nicht zuverlässig). Diese Tests sichern
+// deshalb den tatsächlich verwendeten Weg ab.
+// ---------------------------------------------------------------------
+
+test('Gruppenmitglied darf Zeiger auf geteilte Listen lesen', async () => {
+    await gruppeMitMitglied('gruppeA', 'bob');
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = echterNutzer('bob');
+    await assertSucceeds(getDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
+
+test('Fremder ohne Gruppenmitgliedschaft darf Zeiger NICHT lesen', async () => {
+    await gruppeMitMitglied('gruppeA', 'bob');
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = echterNutzer('fremder');
+    await assertFails(getDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
+
+test('Anonymes Gruppenmitglied darf Zeiger lesen', async () => {
+    await gruppeMitMitglied('gruppeA', 'anonMitglied');
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = anonymerNutzer('anonMitglied');
+    await assertSucceeds(getDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
+
+test('Mitglied darf beim Teilen einen eigenen Zeiger anlegen', async () => {
+    await gruppeMitMitglied('gruppeA', 'alice');
+    const db = echterNutzer('alice');
+    await assertSucceeds(setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+        { ownerUid: 'alice', listeId: 'liste1' }));
+});
+
+test('Mitglied darf KEINEN Zeiger mit fremder ownerUid anlegen (Spoofing)', async () => {
+    await gruppeMitMitglied('gruppeA', 'alice');
+    const db = echterNutzer('alice');
+    await assertFails(setDoc(doc(db, 'groups/gruppeA/geteilteListen/bob_liste1'),
+        { ownerUid: 'bob', listeId: 'liste1' }));
+});
+
+test('Nicht-Mitglied darf keinen Zeiger in einer fremden Gruppe anlegen', async () => {
+    await gruppeMitMitglied('gruppeA', 'bob');
+    const db = echterNutzer('alice'); // nicht Mitglied von gruppeA
+    await assertFails(setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+        { ownerUid: 'alice', listeId: 'liste1' }));
+});
+
+test('Ersteller darf seinen eigenen Zeiger löschen (Teilen beenden)', async () => {
+    await gruppeMitMitglied('gruppeA', 'alice');
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = echterNutzer('alice');
+    await assertSucceeds(deleteDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
+
+test('Anderes Mitglied darf fremden Zeiger NICHT löschen', async () => {
+    await gruppeMitMitglied('gruppeA', 'alice');
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA/members/bob'), { name: 'Bob' });
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = echterNutzer('bob');
+    await assertFails(deleteDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
+
+test('Admin darf einen fremden Zeiger löschen', async () => {
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'groups/gruppeA'), { name: 'Testgruppe', adminUid: 'admin1', locked: false });
+        await setDoc(doc(db, 'groups/gruppeA/members/admin1'), { name: 'Admin' });
+        await setDoc(doc(db, 'groups/gruppeA/members/alice'), { name: 'Alice' });
+        await setDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1'),
+            { ownerUid: 'alice', listeId: 'liste1' });
+    });
+    const db = echterNutzer('admin1');
+    await assertSucceeds(deleteDoc(doc(db, 'groups/gruppeA/geteilteListen/alice_liste1')));
+});
