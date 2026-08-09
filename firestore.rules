@@ -43,6 +43,22 @@ service cloud.firestore {
       return istAngemeldet() && gruppe(gid).adminUid == request.auth.uid;
     }
 
+    // Feste, ausgerollte Prüfung statt Schleife: Firestore-Regeln können
+    // nicht über ein Array laufen und dabei je Eintrag exists() aufrufen -
+    // deshalb die Deckelung auf maximal 5 Gruppen je geteilter Liste
+    // (siehe gueltigeListenDaten). Prüft bei JEDEM Lesezugriff live die
+    // echte, aktuelle Mitgliedschaft statt eines zwischengespeicherten
+    // Zustands - Rausschmiss aus einer Gruppe oder deren Auflösung wirkt
+    // dadurch sofort, ganz ohne die geteilte Liste selbst anzufassen
+    // (Issue #39).
+    function istMitgliedEinerDieserGruppen(gids) {
+      return (gids.size() > 0 && istMitglied(gids[0]))
+          || (gids.size() > 1 && istMitglied(gids[1]))
+          || (gids.size() > 2 && istMitglied(gids[2]))
+          || (gids.size() > 3 && istMitglied(gids[3]))
+          || (gids.size() > 4 && istMitglied(gids[4]));
+    }
+
     // .data.get(feld, standard) statt .data.feld: beide Zähler teilen
     // sich seit Issue #37 dasselbe users/{uid}-Dokument. Wessen Dokument
     // z. B. nur durch listenCount entstanden ist, hat kein groupCount-
@@ -79,6 +95,10 @@ service cloud.firestore {
     // Gemeinsame Feldprüfung für kontogebundene eigene Listen - beim
     // Anlegen UND beim Ändern dieselben Grenzen wie lokal (Issue #35):
     // Kurzname max. 15, Langname max. 40, max. 50 Filme je Liste.
+    // geteiltInGruppen ist optional (fehlt, solange nichts geteilt ist) -
+    // deshalb mit .get(..., []) statt direktem Feldzugriff geprüft, mit
+    // fester Obergrenze von 5 Gruppen (siehe istMitgliedEinerDieserGruppen,
+    // Issue #39).
     function gueltigeListenDaten() {
       return request.resource.data.kurzname is string
              && request.resource.data.kurzname.size() > 0
@@ -87,7 +107,9 @@ service cloud.firestore {
              && request.resource.data.name.size() > 0
              && request.resource.data.name.size() <= 40
              && request.resource.data.filme is list
-             && request.resource.data.filme.size() <= 50;
+             && request.resource.data.filme.size() <= 50
+             && request.resource.data.get('geteiltInGruppen', []) is list
+             && request.resource.data.get('geteiltInGruppen', []).size() <= 5;
     }
 
     // ---------- Nutzer ----------
@@ -95,12 +117,17 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if istAngemeldet() && request.auth.uid == uid;
 
-      // ---------- Eigene Listen, kontogebunden (Relaunch Stufe 3) ----------
-      // Anders als bei Gruppen gibt es hier (noch) kein Teilen zwischen
-      // Nutzern - jede Liste ist ausschließlich für den eigenen Account
-      // les- und schreibbar. Teilen kommt erst in einer späteren Stufe.
+      // ---------- Eigene Listen, kontogebunden (Relaunch Stufe 3+4) ----------
+      // Schreibzugriff bleibt IMMER beim Besitzer (siehe create/update/
+      // delete unten). Lesen ist zusätzlich erlaubt, wenn die Liste mit
+      // einer Gruppe geteilt ist, in der der Anfragende Mitglied ist -
+      // das ist die erste Stelle im Projekt, an der kontogebundene Daten
+      // für Fremde lesbar werden (Issue #39), deshalb bewusst über echte,
+      // live geprüfte Gruppen-Mitgliedschaft abgesichert statt über ein
+      // vom Client selbst geschriebenes Feld.
       match /listen/{listeId} {
-        allow read: if istAngemeldet() && request.auth.uid == uid;
+        allow read: if (istAngemeldet() && request.auth.uid == uid)
+                    || istMitgliedEinerDieserGruppen(resource.data.get('geteiltInGruppen', []));
 
         allow create: if istEchtAngemeldet()
                       && request.auth.uid == uid
