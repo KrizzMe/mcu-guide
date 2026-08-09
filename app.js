@@ -149,6 +149,7 @@ window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({
     herkunft: l.herkunft,
     bearbeitbar: l.eigene ? l.bearbeitbar : undefined,
     sperrgrund: l.eigene ? l.sperrgrund : undefined,
+    erstellerName: l.herkunft === 'geteilt' ? l.erstellerName : undefined,
     anzahlFilme: l.eigene ? l.filme.length : undefined
 }));
 window.getAktiveListeId = () => aktiveListeId;
@@ -794,11 +795,28 @@ const KONTO_LISTEN_MAX = 10;
 const EIGENE_LISTE_FILME_MAX = 50;
 const EIGENER_KURZNAME_MAX = 15;
 const EIGENER_NAME_MAX = 40;
+// Feste Obergrenze, mit wie vielen Gruppen GLEICHZEITIG geteilt werden
+// darf (Relaunch Stufe 4, Issue #39) - muss zur fest ausgerollten Prüfung
+// istMitgliedEinerDieserGruppen() in firestore.rules passen, da Firstore-
+// Regeln nicht über ein Array iterieren können.
+const GETEILT_GRUPPEN_MAX = 5;
 
 // Katalog aus lists/manifest.json, OHNE eigene Listen - wird beim Start
 // einmal befüllt (siehe fetchAndRender). VERFUEGBARE_LISTEN ist davon
-// abgeleitet und enthält zusätzlich die eigenen Listen (lokal + Konto).
+// abgeleitet und enthält zusätzlich die eigenen Listen (lokal + Konto)
+// sowie mit mir geteilte Listen aus Gruppen.
 let KATALOG_LISTEN = [];
+
+// Geteilte Listen ANDERER Mitglieder (Relaunch Stufe 4, Issue #39) -
+// bewusst NUR im Arbeitsspeicher, kein localStorage-Cache: sollen laut
+// Issue "beim Öffnen bzw. beim Wechseln frisch nachgeladen" werden
+// (siehe groups.js: geteilteListenLaden/geteilteListeEinzelnLaden).
+let GETEILTE_LISTEN = [];
+
+window.geteilteListenSetzen = function (listen) {
+    GETEILTE_LISTEN = listen;
+    listenKatalogNeuAufbauen();
+};
 
 // UI-Zustand für die Werkzeuge auf der Inhaltsseite einer eigenen Liste
 // (siehe renderEigeneListeWerkzeuge/renderEigenerFilmCard weiter unten).
@@ -806,6 +824,7 @@ let eigenerFormularOffen = false;
 let eigenerBeschreibungModus = 'tmdb';
 let sortierModusAktiv = false;
 let ziehenderFilmId = null;
+let teilenPanelOffenFuer = null;
 
 function eigeneListenLesen() {
     try {
@@ -868,8 +887,13 @@ window.kontoListenCacheEntfernen = function (listeId) {
 // oder null wenn sie bearbeitbar ist. Lokale Listen sind immer
 // bearbeitbar. Konto-Listen brauchen laut Issue #37 bewusst eine
 // Internetverbindung (kein Offline-Bearbeiten, keine Warteschlange wie
-// bei Bewertungen) UND eine echte Anmeldung (nicht anonym).
+// bei Bewertungen) UND eine echte Anmeldung (nicht anonym). Geteilte
+// Listen (Issue #39) gehören nie einem selbst - für Empfänger IMMER nur
+// lesbar, unabhängig vom Anmeldestatus.
 function eigeneListeSperrgrund(liste) {
+    if (liste.herkunft === 'geteilt') {
+        return `Diese Liste von ${liste.erstellerName || 'jemand anderem'} gehört nicht dir - du kannst sie ansehen und bewerten, aber nicht bearbeiten.`;
+    }
     if (liste.herkunft !== 'konto') return null;
     if (!(typeof window.istEchtAngemeldet === 'function' && window.istEchtAngemeldet())) {
         return 'Diese Liste ist nur lesbar, weil du nicht mehr angemeldet bist.';
@@ -887,23 +911,133 @@ function eigeneListeAlsKatalogEintrag(liste, herkunft) {
         kurzname: liste.kurzname,
         eigene: true,
         herkunft,
-        filme: liste.filme
+        filme: liste.filme,
+        geteiltInGruppen: liste.geteiltInGruppen || [],
+        ownerUid: liste.ownerUid,
+        erstellerName: liste.erstellerName
     };
     eintrag.sperrgrund = eigeneListeSperrgrund(eintrag);
     eintrag.bearbeitbar = !eintrag.sperrgrund;
     return eintrag;
 }
 
-// Sucht eine eigene Liste unabhängig von ihrer Herkunft (lokal oder
-// Konto) und markiert das Ergebnis entsprechend - Grundlage für alle
-// Änderungsfunktionen weiter unten, die beide Speicherorte gleich
-// behandeln können sollen.
+// Sucht eine eigene Liste unabhängig von ihrer Herkunft (lokal, Konto
+// oder mit mir geteilt) und markiert das Ergebnis entsprechend -
+// Grundlage für alle Änderungsfunktionen weiter unten, die mehrere
+// Speicherorte gleich behandeln können sollen.
 function eigeneListeFinden(listeId) {
     const lokal = eigeneListenLesen().find(l => l.id === listeId);
     if (lokal) return { ...lokal, herkunft: 'lokal' };
     const konto = kontoListenCacheLesen().find(l => l.id === listeId);
     if (konto) return { ...konto, herkunft: 'konto' };
+    const geteilt = GETEILTE_LISTEN.find(l => l.id === listeId);
+    if (geteilt) return { ...geteilt, herkunft: 'geteilt' };
     return null;
+}
+
+// --- Mit Gruppen teilen (Relaunch Stufe 4, Issue #39) ---
+// Nur Konto-Listen können geteilt werden (setzt Stufe 3 voraus - eine
+// rein lokale Liste ohne Anmeldung ist für andere technisch nicht
+// erreichbar). Teilen/Beenden läuft über dieselbe Persistierung wie
+// jede andere Änderung (eigeneListePersistieren -> kontoListeSpeichern
+// in groups.js), es wird nur das Feld geteiltInGruppen angepasst.
+
+async function listeMitGruppeTeilen(listeId, gid) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste || liste.herkunft !== 'konto') {
+        return { ok: false, fehler: 'Nur Konto-Listen können geteilt werden.' };
+    }
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
+
+    const bisherige = liste.geteiltInGruppen || [];
+    if (bisherige.includes(gid)) return { ok: true }; // schon geteilt, nichts zu tun
+    if (bisherige.length >= GETEILT_GRUPPEN_MAX) {
+        return { ok: false, fehler: `Eine Liste kann mit höchstens ${GETEILT_GRUPPEN_MAX} Gruppen gleichzeitig geteilt werden.` };
+    }
+
+    liste.geteiltInGruppen = [...bisherige, gid];
+    try {
+        await eigeneListePersistieren(liste);
+        // Zeiger bei der Gruppe anlegen, damit Mitglieder die Liste
+        // überhaupt finden (siehe listePointerHinzufuegen in groups.js -
+        // der eigentliche Lesezugriff läuft unabhängig davon über
+        // geteiltInGruppen auf der Liste selbst).
+        if (typeof window.listePointerHinzufuegen === 'function' && typeof window.getEigeneUid === 'function') {
+            await window.listePointerHinzufuegen(gid, window.getEigeneUid(), listeId);
+        }
+    } catch (err) {
+        return { ok: false, fehler: 'Teilen fehlgeschlagen: ' + (err.message || err) };
+    }
+    return { ok: true };
+}
+
+async function listeVonGruppeEntfernen(listeId, gid) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
+
+    liste.geteiltInGruppen = (liste.geteiltInGruppen || []).filter(g => g !== gid);
+    try {
+        await eigeneListePersistieren(liste);
+        if (typeof window.listePointerEntfernen === 'function' && typeof window.getEigeneUid === 'function') {
+            await window.listePointerEntfernen(gid, window.getEigeneUid(), listeId);
+        }
+    } catch (err) {
+        return { ok: false, fehler: 'Beenden des Teilens fehlgeschlagen: ' + (err.message || err) };
+    }
+    return { ok: true };
+}
+
+function teilenPanelUmschalten(listeId) {
+    teilenPanelOffenFuer = teilenPanelOffenFuer === listeId ? null : listeId;
+    renderContent();
+}
+
+function teilenFehlerAnzeigen(text) {
+    const el = document.getElementById('teilen-fehler');
+    if (el) { el.textContent = text; el.style.display = 'block'; }
+}
+
+async function teilenUmschalten(listeId, gid, aktiv) {
+    const ergebnis = aktiv
+        ? await listeMitGruppeTeilen(listeId, gid)
+        : await listeVonGruppeEntfernen(listeId, gid);
+    if (!ergebnis.ok) {
+        teilenFehlerAnzeigen(ergebnis.fehler);
+        return;
+    }
+    await ladeUndRendereAktiveListe();
+}
+
+// Panel mit einer Checkbox pro lokal gemerkter Gruppen-Mitgliedschaft -
+// Mitgliedschaften kennt nur groups.js (lokal gemerkt, siehe dortige
+// Begründung), deshalb über window.getMeineGruppenMitgliedschaften.
+function renderTeilenPanel(eigeneListe) {
+    const meineGruppen = typeof window.getMeineGruppenMitgliedschaften === 'function'
+        ? window.getMeineGruppenMitgliedschaften()
+        : [];
+
+    if (meineGruppen.length === 0) {
+        return `<div class="eigene-formular">
+            <p class="eigene-hinweis">Du bist noch in keiner Gruppe. Lege zuerst eine Gruppe an oder tritt einer bei.</p>
+        </div>`;
+    }
+
+    const geteiltIn = new Set(eigeneListe.geteiltInGruppen || []);
+    const zeilen = meineGruppen.map(g => `
+        <label class="gruppen-check">
+            <input type="checkbox" ${geteiltIn.has(g.groupId) ? 'checked' : ''}
+                   onchange="teilenUmschalten('${eigeneListe.id}', '${g.groupId}', this.checked)">
+            ${escapeHtml(g.groupName)}
+        </label>`).join('');
+
+    return `<div class="eigene-formular">
+        <div class="eigene-hinweis" style="margin-bottom:8px;">Mit welchen Gruppen soll "${escapeHtml(eigeneListe.kurzname)}" geteilt werden?</div>
+        ${zeilen}
+        <div id="teilen-fehler" class="eigene-fehler" style="display:none;"></div>
+    </div>`;
 }
 
 // Zentrale Speicherstelle für eine geänderte eigene Liste - lokal oder
@@ -929,12 +1063,13 @@ async function eigeneListePersistieren(liste) {
 }
 
 // Baut VERFUEGBARE_LISTEN aus dem festen Katalog + den eigenen Listen
-// (lokal und Konto) neu auf. Nach jeder Änderung aufrufen, damit
+// (lokal, Konto, geteilt) neu auf. Nach jeder Änderung aufrufen, damit
 // findeListeNachId() & Co. den aktuellen Stand sehen.
 function listenKatalogNeuAufbauen() {
     const lokaleEintraege = eigeneListenLesen().map(l => eigeneListeAlsKatalogEintrag(l, 'lokal'));
     const kontoEintraege = kontoListenCacheLesen().map(l => eigeneListeAlsKatalogEintrag(l, 'konto'));
-    VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(lokaleEintraege, kontoEintraege);
+    const geteilteEintraege = GETEILTE_LISTEN.map(l => eigeneListeAlsKatalogEintrag(l, 'geteilt'));
+    VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(lokaleEintraege, kontoEintraege, geteilteEintraege);
 }
 
 // Erzeugt aus Titel + Jahr dieselbe Art von ID wie posters/neuer-film.py
@@ -1378,7 +1513,16 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
         ? `<button class="gruppen-btn schmal grau" onclick="sortierModusUmschalten()">${sortierModusAktiv ? 'Fertig' : '↕ Reihenfolge ändern'}</button>`
         : '';
 
-    return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${formular}</div>`;
+    // Teilen nur für Konto-Listen (Issue #39 setzt Stufe 3 voraus) - eine
+    // rein lokale Liste ohne Anmeldung ist für andere technisch nicht
+    // erreichbar.
+    const anzahlGeteilt = (eigeneListe.geteiltInGruppen || []).length;
+    const teilenButton = eigeneListe.herkunft === 'konto'
+        ? `<button class="gruppen-btn schmal grau" onclick="teilenPanelUmschalten('${eigeneListe.id}')">👥 Teilen${anzahlGeteilt > 0 ? ` (${anzahlGeteilt})` : ''}</button>`
+        : '';
+    const teilenPanel = teilenPanelOffenFuer === eigeneListe.id ? renderTeilenPanel(eigeneListe) : '';
+
+    return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${teilenButton}${formular}${teilenPanel}</div>`;
 }
 
 // Baut eine Filmkarte für eine eigene Liste: dieselbe Karte wie bei
@@ -1420,7 +1564,20 @@ async function ladeUndRendereAktiveListe() {
 
     try {
         let raw;
-        if (eintrag.eigene) {
+        if (eintrag.herkunft === 'geteilt') {
+            // Geteilte Liste: immer frisch von Firestore laden statt den
+            // möglicherweise veralteten Entdeckungs-Stand aus
+            // geteilteListenLaden() zu übernehmen (Issue #39: "beim
+            // Wechseln frisch nachgeladen").
+            if (typeof window.geteilteListeEinzelnLaden !== 'function') {
+                throw new Error('NO_VALID_DATA');
+            }
+            const frisch = await window.geteilteListeEinzelnLaden(eintrag.ownerUid, eintrag.id);
+            if (!frisch) {
+                throw new Error('NICHT_MEHR_GETEILT');
+            }
+            raw = [{ id: 'inhalt', title: frisch.name, navLabel: frisch.kurzname, movies: frisch.filme }];
+        } else if (eintrag.eigene) {
             // Eigene Liste: Filme liegen bereits vollständig in localStorage
             // vor, kein Netzwerkzugriff nötig. Titel der Sektion entspricht
             // dem Listennamen (siehe validateMovieData: "title" ist
@@ -1522,6 +1679,12 @@ function buildErrorMessage(err) {
         return wrap(
             `<code>${datei}</code> enthält keine gültigen Einträge. ` +
             'Details stehen in der Browser-Konsole.'
+        );
+    }
+    if (err && err.message === 'NICHT_MEHR_GETEILT') {
+        return wrap(
+            'Diese Liste ist nicht mehr mit dir geteilt oder wurde gelöscht - ' +
+            'wähle über "Filmreihe wählen" eine andere Liste.'
         );
     }
     return wrap(

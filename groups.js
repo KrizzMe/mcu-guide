@@ -24,8 +24,8 @@ import {
     sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 import {
-    getFirestore, doc, collection, setDoc, getDoc, getDocs, deleteDoc,
-    updateDoc, query, where, serverTimestamp, increment
+    getFirestore, doc, collection, setDoc, getDoc, getDocs,
+    deleteDoc, updateDoc, query, where, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -707,19 +707,35 @@ async function accountLoeschen(auchBewertungen) {
             }
         }
 
-        // 2. Nutzer-Dokument (Gruppenzähler)
+        // 2. Eigene, kontogebundene Listen (Relaunch Stufe 3/4). Firestore
+        //    löscht Unterkollektionen NICHT automatisch mit dem
+        //    übergeordneten Dokument mit (dieselbe bekannte Einschränkung
+        //    wie beim Löschen einer Gruppe, siehe DATENMODELL.md) - ohne
+        //    diesen Schritt blieben mit Gruppen geteilte Listen für deren
+        //    Mitglieder als Geister sichtbar, obwohl der Account weg ist
+        //    (Issue #39).
+        try {
+            const eigeneListen = await getDocs(collection(db, 'users', nutzer.uid, 'listen'));
+            for (const listeDoc of eigeneListen.docs) {
+                await deleteDoc(listeDoc.ref);
+            }
+        } catch (err) {
+            console.warn('Eigene Listen konnten nicht gelöscht werden:', err);
+        }
+
+        // 3. Nutzer-Dokument (Gruppen-/Listen-Zähler)
         try {
             await deleteDoc(doc(db, 'users', nutzer.uid));
         } catch (err) {
             console.warn('Nutzer-Dokument konnte nicht gelöscht werden:', err);
         }
 
-        // 3. Firebase-Konto selbst. Reihenfolge ist zwingend: vorher
+        // 4. Firebase-Konto selbst. Reihenfolge ist zwingend: vorher
         //    brauchen wir die Anmeldung noch für die Schritte oben.
         meldung('Lösche dein Konto...');
         await deleteUser(nutzer);
 
-        // 4. Lokale Daten
+        // 5. Lokale Daten
         lokaleDatenLoeschen(auchBewertungen);
 
         meldung('Dein Account wurde gelöscht.');
@@ -1473,7 +1489,8 @@ async function kontoListeAnlegen(liste) {
     await setDoc(doc(db, 'users', aktuellerNutzer.uid, 'listen', liste.id), {
         kurzname: liste.kurzname,
         name: liste.name,
-        filme: liste.filme
+        filme: liste.filme,
+        geteiltInGruppen: liste.geteiltInGruppen || []
     });
     await setDoc(doc(db, 'users', aktuellerNutzer.uid),
                  { listenCount: increment(1) }, { merge: true });
@@ -1483,14 +1500,16 @@ async function kontoListeAnlegen(liste) {
 }
 
 // Speichert Änderungen an einer bereits bestehenden kontogebundenen
-// Liste (umbenennen, Filme hinzufügen/entfernen/umsortieren - siehe
-// eigeneListePersistieren in app.js, das diese Funktion aufruft).
+// Liste (umbenennen, Filme hinzufügen/entfernen/umsortieren, Teilen mit
+// einer Gruppe starten/beenden - siehe eigeneListePersistieren in
+// app.js, das diese Funktion aufruft).
 async function kontoListeSpeichern(liste) {
     if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
     await setDoc(doc(db, 'users', aktuellerNutzer.uid, 'listen', liste.id), {
         kurzname: liste.kurzname,
         name: liste.name,
-        filme: liste.filme
+        filme: liste.filme,
+        geteiltInGruppen: liste.geteiltInGruppen || []
     });
     if (typeof window.kontoListenCacheAktualisieren === 'function') {
         window.kontoListenCacheAktualisieren(liste);
@@ -1506,6 +1525,118 @@ async function kontoListeLoeschen(listeId) {
         window.kontoListenCacheEntfernen(listeId);
     }
 }
+
+// --- Eigene Listen mit Gruppen teilen (Relaunch Stufe 4, Issue #39) ---
+// Der eigentliche Lesezugriff auf eine geteilte Liste läuft weiterhin
+// direkt über users/{uid}/listen/{listeId} (geprüft via
+// istMitgliedEinerDieserGruppen in firestore.rules - das funktioniert
+// nachweislich, siehe unten). Für das AUFFINDEN geteilter Listen wurde
+// ursprünglich eine Collection-Group-Abfrage über alle users/*/listen-
+// Unterkollektionen verwendet - das schlug in der Praxis mit
+// "permission-denied" fehl: Firestore-Regeln unterstützen exists()-
+// Prüfungen für Collection-Group-Abfragen über Sammlungsgrenzen hinweg
+// offenbar nicht zuverlässig (ein einzelner getDoc() auf denselben Pfad
+// mit derselben Regel funktionierte dagegen einwandfrei - siehe
+// Fehlersuche zu Issue #39). Stattdessen jetzt eine Zeiger-
+// Unterkollektion direkt bei der Gruppe (groups/{gid}/geteilteListen),
+// abgesichert genau wie die bestehende Mitgliederliste über istMitglied()
+// - dieselbe, bereits bewährte Art von Abfrage (eine bekannte, einzelne
+// Gruppe statt sammlungsübergreifend).
+//
+// Bewusst KEIN dauerhafter Echtzeit-Draht (onSnapshot), sondern
+// einmaliges Laden bei Login und beim Öffnen des "Filmreihe wählen"-
+// Fensters (siehe fensterOeffnen), plus ein gezieltes Neuladen der
+// jeweils aktiven Liste beim Wechseln zu ihr (siehe app.js:
+// ladeUndRendereAktiveListe).
+
+function zeigerId(ownerUid, listeId) {
+    return ownerUid + '_' + listeId;
+}
+
+// Legt bzw. entfernt den Zeiger, wenn eine Liste geteilt/nicht mehr
+// geteilt wird - aufgerufen von listeMitGruppeTeilen/
+// listeVonGruppeEntfernen in app.js, direkt neben der eigentlichen
+// Änderung an geteiltInGruppen.
+async function listePointerHinzufuegen(gid, ownerUid, listeId) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await setDoc(doc(db, 'groups', gid, 'geteilteListen', zeigerId(ownerUid, listeId)), { ownerUid, listeId });
+}
+window.listePointerHinzufuegen = listePointerHinzufuegen;
+
+async function listePointerEntfernen(gid, ownerUid, listeId) {
+    if (!istEchtAngemeldet()) throw new Error('Dazu ist eine Anmeldung nötig.');
+    await deleteDoc(doc(db, 'groups', gid, 'geteilteListen', zeigerId(ownerUid, listeId)));
+}
+window.listePointerEntfernen = listePointerEntfernen;
+
+// Sucht über alle lokal gemerkten Mitgliedschaften hinweg nach Listen,
+// die MIT MIR geteilt wurden. Eine Liste, die mit mehreren meiner
+// Gruppen geteilt ist, taucht dabei nur einmal auf.
+async function geteilteListenLaden() {
+    const mitgliedschaften = mitgliedschaftenLesen();
+    if (mitgliedschaften.length === 0) {
+        if (typeof window.geteilteListenSetzen === 'function') window.geteilteListenSetzen([]);
+        return;
+    }
+
+    const gefunden = new Map(); // Schlüssel: ownerUid/listeId, gegen Duplikate bei Mehrfach-Teilung
+
+    for (const mitgliedschaft of mitgliedschaften) {
+        try {
+            const zeiger = await getDocs(collection(db, 'groups', mitgliedschaft.groupId, 'geteilteListen'));
+            for (const zeigerDoc of zeiger.docs) {
+                const { ownerUid, listeId } = zeigerDoc.data();
+                const schluessel = ownerUid + '/' + listeId;
+                if (gefunden.has(schluessel)) continue;
+
+                let listeSnap;
+                try {
+                    listeSnap = await getDoc(doc(db, 'users', ownerUid, 'listen', listeId));
+                } catch (e) {
+                    continue; // z. B. zwischenzeitlich gelöscht oder nicht mehr geteilt
+                }
+                if (!listeSnap.exists()) continue;
+
+                let erstellerName = 'Unbekannt';
+                try {
+                    const mitgliedDoc = await getDoc(doc(db, 'groups', mitgliedschaft.groupId, 'members', ownerUid));
+                    if (mitgliedDoc.exists() && mitgliedDoc.data().name) erstellerName = mitgliedDoc.data().name;
+                } catch (e) { /* Name bleibt "Unbekannt" - kein Grund, deswegen abzubrechen */ }
+
+                gefunden.set(schluessel, {
+                    id: listeId,
+                    ownerUid,
+                    kurzname: listeSnap.data().kurzname,
+                    name: listeSnap.data().name,
+                    filme: listeSnap.data().filme || [],
+                    erstellerName
+                });
+            }
+        } catch (err) {
+            console.warn('Geteilte Listen aus Gruppe ' + mitgliedschaft.groupId + ' konnten nicht geladen werden:', err);
+        }
+    }
+
+    if (typeof window.geteilteListenSetzen === 'function') {
+        window.geteilteListenSetzen(Array.from(gefunden.values()));
+    }
+}
+
+// Lädt EINE geteilte Liste gezielt und frisch nach (siehe Issue #39:
+// "beim Wechseln frisch nachgeladen") - unabhängig vom zuletzt über
+// geteilteListenLaden() gefundenen Stand.
+async function geteilteListeEinzelnLaden(ownerUid, listeId) {
+    const schnappschuss = await getDoc(doc(db, 'users', ownerUid, 'listen', listeId));
+    if (!schnappschuss.exists()) return null;
+    return {
+        id: listeId,
+        ownerUid,
+        kurzname: schnappschuss.data().kurzname,
+        name: schnappschuss.data().name,
+        filme: schnappschuss.data().filme || []
+    };
+}
+window.geteilteListeEinzelnLaden = geteilteListeEinzelnLaden;
 
 // Kandidaten für den Login-Abgleich (siehe listenAbgleichVorschlag in
 // app.js) - null, solange keine Entscheidung ansteht.
@@ -1631,6 +1762,7 @@ function abschnittListen() {
                 <span class="mitglied-name">${sicher(l.name)}</span>
                 ${l.id === aktiveId ? '<span class="gruppen-status">aktiv</span>' : ''}
                 ${l.herkunft === 'konto' ? '<span class="gruppen-status">Konto</span>' : ''}
+                ${l.herkunft === 'geteilt' ? `<span class="gruppen-status">Geteilt von ${sicher(l.erstellerName || '?')}</span>` : ''}
                 ${l.eigene ? `<span class="mitglied-anzahl">${l.anzahlFilme} Film(e)</span>` : ''}
             </div>
             <div class="gruppen-aktionen">
@@ -1957,6 +2089,12 @@ function fensterOeffnen(gewuenschteAnsicht) {
     if (istEchtAngemeldet() && meineGruppen.length === 0) {
         eigeneGruppenLaden().then(zeichneFenster);
     }
+    // "beim Öffnen frisch nachgeladen" (Issue #39) - der Listen-Bereich
+    // zeigt geteilte Listen, die sich zwischenzeitlich geändert haben
+    // könnten (neue Freigabe, beendete Freigabe, anderer Inhalt).
+    if (gewuenschteAnsicht === 'listen') {
+        geteilteListenLaden().then(zeichneFenster);
+    }
 }
 
 function oeffneGruppenFenster() {
@@ -2200,6 +2338,9 @@ document.addEventListener('keydown', event => {
 onAuthStateChanged(auth, async nutzer => {
     aktuellerNutzer = nutzer;
     navBeschriftungAktualisieren();
+    // Geteilte Listen unabhängig vom Anmeldestatus laden - auch anonym
+    // beigetretene Gruppenmitglieder müssen sie sehen können (Issue #39).
+    await geteilteListenLaden();
     if (istEchtAngemeldet()) {
         ladeVorgang = true;
         zeichneFenster();
@@ -2263,6 +2404,10 @@ window.istEchtAngemeldet    = istEchtAngemeldet;
 window.kontoListeAnlegen    = kontoListeAnlegen;
 window.kontoListeSpeichern  = kontoListeSpeichern;
 window.kontoListeLoeschen   = kontoListeLoeschen;
+// Mit Gruppen teilen (Issue #39) - für das Teilen-Panel auf der
+// Inhaltsseite einer eigenen Liste (siehe renderTeilenPanel in app.js).
+window.getMeineGruppenMitgliedschaften = () =>
+    mitgliedschaftenLesen().map(m => ({ groupId: m.groupId, groupName: m.groupName }));
 window.onRatingChanged      = bewertungHochladen;
 window.getEigeneUid         = () => (aktuellerNutzer ? aktuellerNutzer.uid : null);
 
