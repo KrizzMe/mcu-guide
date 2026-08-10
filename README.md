@@ -4,7 +4,7 @@ Ein privater Fan-Guide für die Filme des Marvel Cinematic Universe (MCU) und
 wichtige Zusatzfilme – kuratiert in einer eigenen empfohlenen Reihenfolge für
 gemeinsame Familien-Filmabende.
 
-**Live:** https://krizzme.github.io/mcu-guide/
+**Live:** https://mymovieguide.de/
 
 ## Funktionen
 

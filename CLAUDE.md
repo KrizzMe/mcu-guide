@@ -1,7 +1,7 @@
 My Movie Guide - Projektkontext für Claude Code
 Diese Datei wird bei jeder neuen Sitzung automatisch gelesen. Sie hält fest, was sich über eine lange gemeinsame Entwicklungsgeschichte als feste Arbeitsweise herausgebildet hat - damit das nicht bei jeder Sitzung neu erklärt werden muss.
 Was das Projekt ist
-Private, nicht-kommerzielle Familien-App zum Bewerten von Filmen in mehreren kuratierten Filmreihen (aktuell MCU und Star Wars, weitere folgen), mit optionalem Teilen der Bewertungen in Gruppen. Reines HTML/CSS/JavaScript ohne Build-Prozess, gehostet über GitHub Pages, Backend nur für Anmeldung und geteilte Daten (Firebase). Domain: mymovieguide.de (im Aufbau).
+Private, nicht-kommerzielle Familien-App zum Bewerten von Filmen in mehreren kuratierten Filmreihen (aktuell MCU und Star Wars, weitere folgen), mit optionalem Teilen der Bewertungen in Gruppen. Reines HTML/CSS/JavaScript ohne Build-Prozess, gehostet über GitHub Pages, Backend nur für Anmeldung und geteilte Daten (Firebase). Domain: mymovieguide.de.
 Sprache
 
 * Alle Code-Kommentare auf Deutsch.
