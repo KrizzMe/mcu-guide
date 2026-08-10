@@ -10,5 +10,11 @@
     "name": "Star Wars",
     "kurzname": "Star Wars",
     "datei": "lists/star-wars.json"
+  },
+  {
+    "id": "dc",
+    "name": "DC Universe",
+    "kurzname": "DC",
+    "datei": "lists/dc.json"
   }
 ]
