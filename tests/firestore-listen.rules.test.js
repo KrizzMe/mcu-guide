@@ -130,6 +130,40 @@ test('"filme" muss eine Liste sein, kein beliebiger Wert', async () => {
         { ...GUELTIGE_LISTE, filme: 'kaputt' }));
 });
 
+// --- Hintergrundbild (Issue #69) ---
+// Gespeichert wird nur der TMDB-Bildpfad (z. B. "/xyz.jpg"), nicht die
+// volle URL. Das Feld ist optional/nullbar wie geteiltInGruppen, damit
+// Listen von vor Issue #69 (ohne das Feld) gültig bleiben.
+
+test('Liste ohne hintergrund-Feld darf weiterhin angelegt werden (Rückwärtskompatibilität)', async () => {
+    const db = echterNutzer('alice');
+    await assertSucceeds(setDoc(doc(db, 'users/alice/listen/liste1'), GUELTIGE_LISTE));
+});
+
+test('Hintergrund als null wird akzeptiert (kein Bild gewählt)', async () => {
+    const db = echterNutzer('alice');
+    await assertSucceeds(setDoc(doc(db, 'users/alice/listen/liste1'),
+        { ...GUELTIGE_LISTE, hintergrund: null }));
+});
+
+test('Hintergrund als TMDB-Bildpfad wird akzeptiert', async () => {
+    const db = echterNutzer('alice');
+    await assertSucceeds(setDoc(doc(db, 'users/alice/listen/liste1'),
+        { ...GUELTIGE_LISTE, hintergrund: '/mDfJG3LC3Dqb67AZ52x3Z0jU0uB.jpg' }));
+});
+
+test('Hintergrund über 100 Zeichen wird abgelehnt', async () => {
+    const db = echterNutzer('alice');
+    await assertFails(setDoc(doc(db, 'users/alice/listen/liste1'),
+        { ...GUELTIGE_LISTE, hintergrund: '/' + 'x'.repeat(100) + '.jpg' }));
+});
+
+test('Hintergrund als Zahl statt String/null wird abgelehnt', async () => {
+    const db = echterNutzer('alice');
+    await assertFails(setDoc(doc(db, 'users/alice/listen/liste1'),
+        { ...GUELTIGE_LISTE, hintergrund: 12345 }));
+});
+
 test('Ohne users/{uid}-Dokument (kein Zähler) ist Anlegen erlaubt', async () => {
     const db = echterNutzer('alice');
     await assertSucceeds(setDoc(doc(db, 'users/alice/listen/liste1'), GUELTIGE_LISTE));
@@ -220,6 +254,33 @@ test('Update mit mehr als 50 Filmen wird abgelehnt', async () => {
     const db = echterNutzer('alice');
     const zuVieleFilme = Array.from({ length: 51 }, (_, i) => ({ id: 'film-' + i }));
     await assertFails(updateDoc(doc(db, 'users/alice/listen/liste1'), { filme: zuVieleFilme }));
+});
+
+test('Update mit gültigem Hintergrund wird akzeptiert', async () => {
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'users/alice/listen/liste1'), GUELTIGE_LISTE);
+    });
+    const db = echterNutzer('alice');
+    await assertSucceeds(updateDoc(doc(db, 'users/alice/listen/liste1'),
+        { hintergrund: '/mDfJG3LC3Dqb67AZ52x3Z0jU0uB.jpg' }));
+});
+
+test('Update mit zu langem Hintergrund wird abgelehnt', async () => {
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'users/alice/listen/liste1'), GUELTIGE_LISTE);
+    });
+    const db = echterNutzer('alice');
+    await assertFails(updateDoc(doc(db, 'users/alice/listen/liste1'),
+        { hintergrund: '/' + 'x'.repeat(100) + '.jpg' }));
+});
+
+test('Hintergrund lässt sich per Update wieder auf null zurücksetzen', async () => {
+    await alsAdmin(async db => {
+        await setDoc(doc(db, 'users/alice/listen/liste1'),
+            { ...GUELTIGE_LISTE, hintergrund: '/mDfJG3LC3Dqb67AZ52x3Z0jU0uB.jpg' });
+    });
+    const db = echterNutzer('alice');
+    await assertSucceeds(updateDoc(doc(db, 'users/alice/listen/liste1'), { hintergrund: null }));
 });
 
 test('Update ist auch am 10er-Limit weiterhin erlaubt (Limit gilt nur beim Anlegen)', async () => {

@@ -98,7 +98,13 @@ service cloud.firestore {
     // geteiltInGruppen ist optional (fehlt, solange nichts geteilt ist) -
     // deshalb mit .get(..., []) statt direktem Feldzugriff geprüft, mit
     // fester Obergrenze von 5 Gruppen (siehe istMitgliedEinerDieserGruppen,
-    // Issue #39).
+    // Issue #39). hintergrund (Issue #69) ist ebenso optional wie
+    // geteiltInGruppen - fehlt bei Listen von vor Issue #69 komplett, die
+    // App selbst schreibt zwar bei jedem setDoc explizit null oder einen
+    // TMDB-Bildpfad, aber die Regel darf sich darauf nicht verlassen.
+    // Deshalb .get('hintergrund', null), fehlendes Feld zählt wie null.
+    // Gespeichert wird nur der TMDB-Bildpfad (z. B. "/xyz.jpg"), keine
+    // volle URL - 100 Zeichen sind dafür reichlich.
     function gueltigeListenDaten() {
       return request.resource.data.kurzname is string
              && request.resource.data.kurzname.size() > 0
@@ -109,7 +115,10 @@ service cloud.firestore {
              && request.resource.data.filme is list
              && request.resource.data.filme.size() <= 50
              && request.resource.data.get('geteiltInGruppen', []) is list
-             && request.resource.data.get('geteiltInGruppen', []).size() <= 5;
+             && request.resource.data.get('geteiltInGruppen', []).size() <= 5
+             && (request.resource.data.get('hintergrund', null) == null
+                 || (request.resource.data.get('hintergrund', null) is string
+                     && request.resource.data.get('hintergrund', null).size() <= 100));
     }
 
     // ---------- Nutzer ----------

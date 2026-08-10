@@ -175,12 +175,14 @@ window.getVerfuegbareListen = () => VERFUEGBARE_LISTEN.map(l => ({
     bearbeitbar: l.eigene ? l.bearbeitbar : undefined,
     sperrgrund: l.eigene ? l.sperrgrund : undefined,
     erstellerName: l.herkunft === 'geteilt' ? l.erstellerName : undefined,
-    anzahlFilme: l.eigene ? l.filme.length : undefined
+    anzahlFilme: l.eigene ? l.filme.length : undefined,
+    hintergrund: l.eigene ? l.hintergrund : undefined
 }));
 window.getAktiveListeId = () => aktiveListeId;
 window.listeWechseln = listeWechseln;
 window.eigeneListeAnlegen = eigeneListeAnlegen;
 window.eigeneListeUmbenennen = eigeneListeUmbenennen;
+window.eigeneListeHintergrundSetzen = eigeneListeHintergrundSetzen;
 window.eigeneListeLoeschen = eigeneListeLoeschen;
 window.getEigeneListenAnzahl = () => eigeneListenLesen().length;
 window.getEigeneListenMax = () => EIGENE_LISTEN_MAX;
@@ -578,8 +580,9 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
         // Cache-Einträge von vor Issue #67 haben das Feld gar nicht (auch
         // nicht als null) und würden sonst bis zu 7 Tage lang fälschlich
         // als "gültig, aber ohne Freigabe" durchgehen statt neu geladen
-        // zu werden.
-        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS && 'altersfreigabe' in eintrag) {
+        // zu werden. Dieselbe Falle gilt für 'backdropPath' seit Issue #69.
+        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS
+            && 'altersfreigabe' in eintrag && 'backdropPath' in eintrag) {
             titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit, eintrag.altersfreigabe);
         } else {
             zuLaden.push({ id, tmdbId });
@@ -600,8 +603,12 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
             const titel = `${rohtitel} (${jahr})`;
             const laufzeit = daten.runtime ? `${daten.runtime} Min.` : '---';
             const altersfreigabe = ermittleAltersfreigabe(daten);
+            // backdrop_path (Issue #69): TMDB-Bildpfad für die
+            // Hintergrund-Auswahl eigener Listen, fällt aus derselben
+            // Anfrage ab, keine zusätzliche Abfrage nötig.
+            const backdropPath = daten.backdrop_path || null;
 
-            cache[tmdbId] = { title: titel, laufzeit, altersfreigabe, cachedAt: Date.now() };
+            cache[tmdbId] = { title: titel, laufzeit, altersfreigabe, backdropPath, cachedAt: Date.now() };
             titelUndLaufzeitAnzeigen(id, titel, laufzeit, altersfreigabe);
         } catch (err) {
             console.warn('Titel/Laufzeit konnten nicht geladen werden für', id, err);
@@ -611,6 +618,35 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
 
     tmdbDetailsCacheSchreiben(cache);
 }
+
+// Liefert für die Filme einer eigenen Liste die als Hintergrund wählbaren
+// Backdrops (Issue #69) - aus demselben TMDB-Detail-Cache wie Titel/
+// Laufzeit, keine zusätzliche Anfrage. Nur Filme mit bereits gefülltem
+// Cache-Eintrag tauchen auf; die Liste wird üblicherweise schon einmal
+// angezeigt (und damit ihr Cache befüllt), bevor das Bearbeiten-Formular
+// geöffnet wird. Nimmt bewusst die listeId statt eines fertigen
+// Film-Arrays entgegen: getVerfuegbareListen() gibt aus Datensparsamkeit
+// nur anzahlFilme statt der vollen filme-Liste nach außen, die Suche
+// nach den tatsächlichen Filmen bleibt intern.
+window.getBackdropOptionenFuerListe = function (listeId) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return [];
+    const cache = tmdbDetailsCacheLesen();
+    const optionen = [];
+    (liste.filme || []).forEach(movie => {
+        const tmdbId = extractTmdbId(movie.tmdb);
+        const eintrag = tmdbId && cache[tmdbId];
+        if (eintrag && eintrag.backdropPath) {
+            optionen.push({
+                movieId: movie.id,
+                titel: eintrag.title,
+                backdropPath: eintrag.backdropPath,
+                thumbUrl: `https://image.tmdb.org/t/p/w300${eintrag.backdropPath}`
+            });
+        }
+    });
+    return optionen;
+};
 
 // Liest die deutsche FSK-Freigabe aus release_dates (Issue #67). TMDB
 // liefert pro Land mehrere Einträge (Kino, Video, ...) mit teils leerer
@@ -1027,6 +1063,30 @@ function findeListeNachId(listeId) {
     return VERFUEGBARE_LISTEN.find(l => l.id === listeId) || null;
 }
 
+// --- Hintergrundbild je aktiver Liste (Issue #69) ---
+// Kuratierte Listen tragen in lists/manifest.json bereits die volle
+// TMDB-Bild-URL. Eigene Listen speichern nur den TMDB-Bildpfad
+// (backdrop_path, z. B. "/xyz.jpg") statt der vollen URL - konsistent
+// mit der sonstigen Regel, von TMDB ableitbare Daten nicht redundant zu
+// speichern. Ohne gewähltes Bild (oder bei Listen ohne Feld, z. B. aus
+// der Zeit vor Issue #69) gibt es KEIN Ersatzfoto mehr - der frühere
+// statische bg.jpg-Fallback stammte nicht von TMDB und hatte keine
+// geklärte Nutzungserlaubnis. Stattdessen greift der graue Verlauf aus
+// styles.css (body), sobald die Inline-Eigenschaft entfernt wird.
+function hintergrundUrlFuerListe(eintrag) {
+    if (!eintrag || !eintrag.hintergrund) return null;
+    return eintrag.eigene
+        ? `https://image.tmdb.org/t/p/original${eintrag.hintergrund}`
+        : eintrag.hintergrund;
+}
+
+function hintergrundAktualisieren(eintrag) {
+    const url = hintergrundUrlFuerListe(eintrag);
+    document.body.style.backgroundImage = url
+        ? `linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.92)), url('${url}')`
+        : '';
+}
+
 // Wechselt zu einer anderen Liste: lädt deren Daten, baut Navigation
 // und Inhalt neu auf. Wird vom "Listen"-Bereich aus aufgerufen.
 async function listeWechseln(listeId) {
@@ -1095,6 +1155,7 @@ let eigenerBeschreibungModus = 'tmdb';
 let sortierModusAktiv = false;
 let ziehenderFilmId = null;
 let teilenPanelOffenFuer = null;
+let hintergrundPanelOffenFuer = null;
 
 // Zustand der TMDB-Live-Suche im "Film hinzufügen"-Formular (Issue #49).
 // eigenerSucheErgebnisse und eigenerAusgewaehlterFilm bleiben bewusst nur
@@ -1191,6 +1252,7 @@ function eigeneListeAlsKatalogEintrag(liste, herkunft) {
         herkunft,
         filme: liste.filme,
         geteiltInGruppen: liste.geteiltInGruppen || [],
+        hintergrund: liste.hintergrund || null,
         ownerUid: liste.ownerUid,
         erstellerName: liste.erstellerName
     };
@@ -1273,6 +1335,28 @@ function teilenPanelUmschalten(listeId) {
     renderContent();
 }
 
+// Hintergrundbild-Panel auf der Inhaltsseite einer eigenen Liste (Issue
+// #69, CR: Button direkt an der Liste statt nur im Listen-Fenster) - vom
+// Aufbau her bewusst analog zu teilenPanelUmschalten/renderTeilenPanel.
+function hintergrundPanelUmschalten(listeId) {
+    hintergrundPanelOffenFuer = hintergrundPanelOffenFuer === listeId ? null : listeId;
+    renderContent();
+}
+
+function hintergrundFehlerAnzeigen(text) {
+    const el = document.getElementById('hintergrund-fehler');
+    if (el) { el.textContent = text; el.style.display = 'block'; }
+}
+
+async function eigeneListeHintergrundWaehlen(listeId, backdropPath) {
+    const ergebnis = await eigeneListeHintergrundSetzen(listeId, backdropPath || null);
+    if (!ergebnis.ok) {
+        hintergrundFehlerAnzeigen(ergebnis.fehler);
+        return;
+    }
+    await ladeUndRendereAktiveListe();
+}
+
 function teilenFehlerAnzeigen(text) {
     const el = document.getElementById('teilen-fehler');
     if (el) { el.textContent = text; el.style.display = 'block'; }
@@ -1315,6 +1399,38 @@ function renderTeilenPanel(eigeneListe) {
         <div class="eigene-hinweis" style="margin-bottom:8px;">Mit welchen Gruppen soll "${escapeHtml(eigeneListe.kurzname)}" geteilt werden?</div>
         ${zeilen}
         <div id="teilen-fehler" class="eigene-fehler" style="display:none;"></div>
+    </div>`;
+}
+
+// Panel zur Hintergrundbild-Auswahl (Issue #69) - Bildoptionen kommen aus
+// den Backdrops der bereits in der Liste enthaltenen Filme (aus dem
+// TMDB-Detail-Cache, siehe getBackdropOptionenFuerListe weiter oben),
+// keine freie URL-Eingabe. Aufbau bewusst analog zu renderTeilenPanel.
+function renderHintergrundPanel(eigeneListe) {
+    const optionen = getBackdropOptionenFuerListe(eigeneListe.id);
+
+    if (optionen.length === 0) {
+        return `<div class="eigene-formular">
+            <p class="eigene-hinweis">Noch keine Bilder verfügbar - lade die Seite einmal
+               neu, damit die Filmbilder geladen werden.</p>
+        </div>`;
+    }
+
+    const keins = `
+        <button type="button" class="hintergrund-thumb hintergrund-thumb-leer${eigeneListe.hintergrund ? '' : ' aktiv'}"
+                onclick="eigeneListeHintergrundWaehlen('${eigeneListe.id}', null)"
+                aria-label="Kein Hintergrundbild">✕</button>`;
+    const thumbs = optionen.map(o => `
+        <button type="button" class="hintergrund-thumb${eigeneListe.hintergrund === o.backdropPath ? ' aktiv' : ''}"
+                onclick="eigeneListeHintergrundWaehlen('${eigeneListe.id}', '${escapeAttr(o.backdropPath)}')"
+                aria-label="${escapeAttr(o.titel)} als Hintergrund wählen">
+            <img src="${o.thumbUrl}" alt="" loading="lazy">
+        </button>`).join('');
+
+    return `<div class="eigene-formular">
+        <div class="eigene-hinweis" style="margin-bottom:8px;">Welches Hintergrundbild soll "${escapeHtml(eigeneListe.kurzname)}" bekommen?</div>
+        <div class="hintergrund-thumbs">${keins}${thumbs}</div>
+        <div id="hintergrund-fehler" class="eigene-fehler" style="display:none;"></div>
     </div>`;
 }
 
@@ -1503,6 +1619,29 @@ async function eigeneListeUmbenennen(listeId, kurznameRoh, nameRoh) {
         await eigeneListePersistieren(liste);
     } catch (err) {
         return { ok: false, fehler: 'Änderung konnte nicht gespeichert werden: ' + (err.message || err) };
+    }
+    return { ok: true };
+}
+
+// Setzt oder löscht (backdropPath === null) das Hintergrundbild einer
+// eigenen Liste (Issue #69). Gespeichert wird nur der TMDB-Bildpfad,
+// siehe hintergrundUrlFuerListe weiter oben. Läuft über dieselbe
+// eigeneListePersistieren wie Umbenennen - dadurch automatisch mit der
+// Liste in Gruppen geteilt, ohne zusätzlichen Code.
+async function eigeneListeHintergrundSetzen(listeId, backdropPath) {
+    const liste = eigeneListeFinden(listeId);
+    if (!liste) return { ok: false, fehler: 'Liste nicht gefunden.' };
+    const sperrgrund = eigeneListeSperrgrund(liste);
+    if (sperrgrund) return { ok: false, fehler: sperrgrund };
+
+    liste.hintergrund = backdropPath || null;
+    try {
+        await eigeneListePersistieren(liste);
+    } catch (err) {
+        return { ok: false, fehler: 'Änderung konnte nicht gespeichert werden: ' + (err.message || err) };
+    }
+    if (listeId === aktiveListeId) {
+        hintergrundAktualisieren(findeListeNachId(listeId));
     }
     return { ok: true };
 }
@@ -1886,6 +2025,12 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
         ? `<button class="gruppen-btn schmal grau" onclick="sortierModusUmschalten()">${sortierModusAktiv ? 'Fertig' : '↕ Reihenfolge ändern'}</button>`
         : '';
 
+    // Hintergrundbild (Issue #69, CR: Button direkt an der Liste, analog
+    // zu "Reihenfolge ändern" - nur sichtbar, wenn die Liste bearbeitbar
+    // ist, also nur für die Besitzerin).
+    const hintergrundButton = `<button class="gruppen-btn schmal grau" onclick="hintergrundPanelUmschalten('${eigeneListe.id}')">🖼 Hintergrund</button>`;
+    const hintergrundPanel = hintergrundPanelOffenFuer === eigeneListe.id ? renderHintergrundPanel(eigeneListe) : '';
+
     // Teilen nur für Konto-Listen (Issue #39 setzt Stufe 3 voraus) - eine
     // rein lokale Liste ohne Anmeldung ist für andere technisch nicht
     // erreichbar.
@@ -1895,7 +2040,7 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
         : '';
     const teilenPanel = teilenPanelOffenFuer === eigeneListe.id ? renderTeilenPanel(eigeneListe) : '';
 
-    return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${teilenButton}${formular}${teilenPanel}</div>`;
+    return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${hintergrundButton}${teilenButton}${formular}${hintergrundPanel}${teilenPanel}</div>`;
 }
 
 // Baut eine Filmkarte für eine eigene Liste: dieselbe Karte wie bei
@@ -1947,6 +2092,12 @@ async function ladeUndRendereAktiveListe() {
         return;
     }
 
+    // Hintergrund normalerweise aus dem Katalog-Eintrag - bei geteilten
+    // Listen unten durch den frisch geladenen Stand ersetzt, damit ein
+    // gerade vom Besitzer geändertes Hintergrundbild nicht erst nach dem
+    // nächsten geteilteListenLaden() sichtbar wird (Issue #69).
+    let hintergrund = eintrag.hintergrund;
+
     try {
         let raw;
         if (eintrag.herkunft === 'geteilt') {
@@ -1962,6 +2113,7 @@ async function ladeUndRendereAktiveListe() {
                 throw new Error('NICHT_MEHR_GETEILT');
             }
             raw = [{ id: 'inhalt', title: frisch.name, navLabel: frisch.kurzname, movies: frisch.filme }];
+            hintergrund = frisch.hintergrund;
         } else if (eintrag.eigene) {
             // Eigene Liste: Filme liegen bereits vollständig in localStorage
             // vor, kein Netzwerkzugriff nötig. Titel der Sektion entspricht
@@ -1997,6 +2149,7 @@ async function ladeUndRendereAktiveListe() {
         MOVIE_DATA = sections;
         renderNav();
         renderContent();
+        hintergrundAktualisieren({ ...eintrag, hintergrund });
 
         if (skippedSections > 0 || skippedMovies > 0) {
             console.warn(

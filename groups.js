@@ -1506,7 +1506,8 @@ async function kontoListenLaden() {
             id: d.id,
             kurzname: d.data().kurzname,
             name: d.data().name,
-            filme: d.data().filme || []
+            filme: d.data().filme || [],
+            hintergrund: d.data().hintergrund || null
         }));
         if (typeof window.kontoListenCacheSetzen === 'function') {
             window.kontoListenCacheSetzen(listen);
@@ -1525,7 +1526,8 @@ async function kontoListeAnlegen(liste) {
         kurzname: liste.kurzname,
         name: liste.name,
         filme: liste.filme,
-        geteiltInGruppen: liste.geteiltInGruppen || []
+        geteiltInGruppen: liste.geteiltInGruppen || [],
+        hintergrund: liste.hintergrund || null
     });
     await setDoc(doc(db, 'users', aktuellerNutzer.uid),
                  { listenCount: increment(1) }, { merge: true });
@@ -1544,7 +1546,8 @@ async function kontoListeSpeichern(liste) {
         kurzname: liste.kurzname,
         name: liste.name,
         filme: liste.filme,
-        geteiltInGruppen: liste.geteiltInGruppen || []
+        geteiltInGruppen: liste.geteiltInGruppen || [],
+        hintergrund: liste.hintergrund || null
     });
     if (typeof window.kontoListenCacheAktualisieren === 'function') {
         window.kontoListenCacheAktualisieren(liste);
@@ -1644,6 +1647,7 @@ async function geteilteListenLaden() {
                     kurzname: listeSnap.data().kurzname,
                     name: listeSnap.data().name,
                     filme: listeSnap.data().filme || [],
+                    hintergrund: listeSnap.data().hintergrund || null,
                     erstellerName
                 });
             }
@@ -1668,7 +1672,8 @@ async function geteilteListeEinzelnLaden(ownerUid, listeId) {
         ownerUid,
         kurzname: schnappschuss.data().kurzname,
         name: schnappschuss.data().name,
-        filme: schnappschuss.data().filme || []
+        filme: schnappschuss.data().filme || [],
+        hintergrund: schnappschuss.data().hintergrund || null
     };
 }
 window.geteilteListeEinzelnLaden = geteilteListeEinzelnLaden;
@@ -1923,10 +1928,11 @@ function abschnittInfos() {
         </div>
 
         <div class="ds-block">
-            <div class="ds-titel">Filmdaten und Poster</div>
-            <p>Filmdaten und Poster stammen von The Movie Database (TMDB). Die Rechte an
-               den Postern liegen bei den jeweiligen Filmstudios. Diese Seite steht in
-               keiner Verbindung zu Marvel, Disney oder anderen Rechteinhabern.</p>
+            <div class="ds-titel">Filmdaten, Poster und Hintergrundbilder</div>
+            <p>Filmdaten, Poster und Hintergrundbilder stammen von The Movie Database
+               (TMDB). Die Rechte an den Postern und Hintergrundbildern liegen bei den
+               jeweiligen Filmstudios. Diese Seite steht in keiner Verbindung zu Marvel,
+               Disney oder anderen Rechteinhabern.</p>
 
             <div class="tmdb-attribution">
                 <div class="tmdb-untertitel">Hinweis zur Datenquelle</div>

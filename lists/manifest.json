@@ -3,18 +3,21 @@
     "id": "mcu",
     "name": "Marvel Cinematic Universe",
     "kurzname": "MCU",
-    "datei": "lists/mcu.json"
+    "datei": "lists/mcu.json",
+    "hintergrund": "https://image.tmdb.org/t/p/original/mDfJG3LC3Dqb67AZ52x3Z0jU0uB.jpg"
   },
   {
     "id": "star-wars",
     "name": "Star Wars",
     "kurzname": "Star Wars",
-    "datei": "lists/star-wars.json"
+    "datei": "lists/star-wars.json",
+    "hintergrund": "https://image.tmdb.org/t/p/original/8BTsTfln4jlQrLXUBquXJ0ASQy9.jpg"
   },
   {
     "id": "dc",
     "name": "DC Universe",
     "kurzname": "DC",
-    "datei": "lists/dc.json"
+    "datei": "lists/dc.json",
+    "hintergrund": "https://image.tmdb.org/t/p/original/69EFgWWPFWbRNHmQgYdSnyJ94Ge.jpg"
   }
 ]
