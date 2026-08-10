@@ -215,6 +215,7 @@
 
         .quick-nav a.nav-groups,
         .quick-nav a.nav-konto,
+        .quick-nav a.nav-streaming,
         .quick-nav a.nav-listen { white-space: nowrap; }
 
         /* Icon grau statt bunt - gleicher Look wie eine nicht bewertete
@@ -222,6 +223,7 @@
         .nav-home-icon,
         .nav-groups-icon,
         .nav-konto-icon,
+        .nav-streaming-icon,
         .nav-listen-icon {
             filter: grayscale(1) opacity(0.35);
         }
@@ -288,7 +290,6 @@
             gap: 0;
             align-items: stretch;
             aspect-ratio: 50 / 11;
-            cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
@@ -321,8 +322,16 @@
             font-size: 0.75rem;
             color: var(--text-muted);
             overflow: hidden;
+            cursor: pointer;
             -webkit-mask-image: linear-gradient(to right, black 58%, transparent 96%);
             mask-image: linear-gradient(to right, black 58%, transparent 96%);
+        }
+
+        /* Umschließt Titel + Beschreibung (Issue #33 CR). Auf Desktop nicht
+           klickbar (nur das Poster öffnet dort die Großansicht) - die
+           Mobile-Ausnahme steht im @media-Block weiter unten. */
+        .movie-oben {
+            cursor: default;
         }
 
         .movie-poster img {
@@ -465,6 +474,52 @@
         .meta-icon:hover {
             opacity: 1;
             transform: scale(1.12);
+        }
+
+        /* Streaming-Anbieter-Logos auf der Filmkarte (Issue #33), unter der
+           TMDB/Trailer/Popcorn-Zeile. Zeile bleibt leer/kollabiert, solange
+           keine Auswahl getroffen oder die TMDB-Antwort noch nicht da ist -
+           kein Layout-Sprung. */
+        .movie-anbieter-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 8px;
+        }
+
+        .movie-anbieter-row:empty { display: none; }
+
+        .justwatch-icon {
+            height: 20px;
+            width: auto;
+            display: block;
+        }
+
+        .anbieter-logo {
+            height: 30px;
+            width: auto;
+            border-radius: 4px;
+            display: block;
+        }
+
+        /* Nur leihbar/käuflich statt im Abo: fast komplett entsättigt statt
+           nur transparenter - bei bloßer Transparenz blieben die Farben
+           (z. B. Disney Plus und Prime Video, beide bläulich) kaum
+           unterscheidbar von den kräftigen Abo-Logos. Gleiches Muster wie
+           bei nicht bewerteten Popcorn-Tüten (.popcorn) und Nav-Icons. */
+        .anbieter-logo.anbieter-kauf {
+            filter: grayscale(0.9) opacity(0.45);
+        }
+
+        .anbieter-attribution {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            margin-left: 2px;
+            /* Reihe zentriert per align-items sonst alle Elemente auf
+               Logo-Mitte - der deutlich kleinere Text wirkt dadurch wie
+               "schwebend". Stattdessen an der Unterkante der Logos halten. */
+            align-self: flex-end;
         }
 
         /* Bewertung: Popcorn-Tüten statt Sterne */
@@ -884,6 +939,39 @@
             cursor: pointer;
         }
 
+        /* Anbieterauswahl (Issue #33) - Grid aus Checkbox-Kacheln statt
+           einer schlichten Liste, da hier zusätzlich ein Logo pro Zeile
+           sitzt und bis zu 9 Einträge übersichtlich bleiben müssen. */
+        .anbieter-liste {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .anbieter-check {
+            margin-bottom: 0;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .anbieter-check.deaktiviert {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .anbieter-check-logo {
+            height: 20px;
+            width: auto;
+            border-radius: 3px;
+        }
+
+        .anbieter-zaehler {
+            text-align: right;
+            font-size: 0.8rem;
+        }
+
         .gruppen-zeile select {
             flex: 1;
             background: rgba(255,255,255,0.05);
@@ -982,6 +1070,23 @@
             font-size: 0.8rem !important;
             color: var(--text-muted) !important;
             margin-bottom: 6px !important;
+        }
+
+        /* JustWatch-Hinweis im Infos-Bereich, gleiche Box wie die
+           TMDB-Attribution darüber (.tmdb-attribution) - eigenes Icon
+           (nur der Pfeil, siehe justwatch-icon.svg) plus Schriftzug als
+           Text, da das Symbol allein "JustWatch" nicht erkennbar macht. */
+        .justwatch-attribution-zeile {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: var(--text-color);
+        }
+
+        .justwatch-attribution-logo {
+            height: 22px;
+            width: auto;
         }
 
         /* --- Datenschutzhinweise (Issue #22) --- */
@@ -1316,6 +1421,14 @@
 
             .movie-poster img {
                 object-position: top;
+            }
+
+            /* Mobile: Poster liegt als Kartenhintergrund UNTER dem Text
+               (siehe .movie-poster oben), daher öffnet hier zusätzlich zum
+               Poster auch Titel+Beschreibung die Großansicht - der untere
+               Bereich (TMDB/Trailer/Anbieter) bleibt bewusst außen vor. */
+            .movie-oben {
+                cursor: pointer;
             }
 
             /* Auf Mobile ist das Poster der Kartenhintergrund. Fehlt es, würde
