@@ -54,8 +54,17 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.92)), 
-                        url('bg.jpg');
+            /* Grauer Verlauf statt eines Fotos als Standard-Hintergrund
+               (Issue #69): das frühere bg.jpg stammte nicht von TMDB und
+               hatte damit keine geklärte Nutzungserlaubnis (siehe README/
+               CLAUDE.md zur sonst durchgängigen Sorgfalt bei Bildquellen).
+               background-image bewusst als eigene Eigenschaft statt im
+               background-Kurzschreibweise: wird per JS (hintergrundAktualisieren
+               in app.js) auf ein TMDB-Hintergrundbild der aktiven Liste
+               umgeschaltet, sobald eines gewählt ist - ohne gewähltes Bild
+               entfernt das JS die Inline-Eigenschaft wieder, dieser
+               Verlauf hier greift dann automatisch als Fallback. */
+            background-image: linear-gradient(to right, var(--bg-color), var(--border-color) 50%, var(--bg-color));
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -861,6 +870,43 @@
         }
 
         .gruppen-zeile { margin-bottom: 10px; display: flex; gap: 8px; }
+
+        /* Hintergrundbild-Auswahl auf der Inhaltsseite einer eigenen Liste (Issue #69) */
+        .hintergrund-thumbs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .hintergrund-thumb {
+            width: 72px;
+            height: 44px;
+            padding: 0;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            background: rgba(255,255,255,0.05);
+            overflow: hidden;
+            cursor: pointer;
+            color: var(--text-color);
+        }
+
+        .hintergrund-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .hintergrund-thumb.aktiv {
+            border-color: var(--accent-color);
+        }
+
+        .hintergrund-thumb-leer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
 
         .gruppen-zeile input {
             flex: 1;

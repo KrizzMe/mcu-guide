@@ -28,7 +28,6 @@ gemeinsame Familien-Filmabende.
 | `posters/` | Lokale Poster-Bilder, Dateiname = `id` aus `moviedata.json` |
 | `manifest.json` | App-Icon und Metadaten für "Zum Homescreen hinzufügen" |
 | `m.png`, `fav32.png` | App-Icon bzw. Favicon |
-| `bg.jpg` | Hintergrundbild |
 | `imdb.png`, `tmdb.png` | Icons für die Verlinkung zu IMDb/TMDb |
 | `DATENMODELL.md` | Aufbau der Gruppenfunktion in Firestore, Zugriffsregeln |
 
