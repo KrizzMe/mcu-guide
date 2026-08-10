@@ -69,6 +69,7 @@ function renderNav() {
     // groups.js). Listen steht bewusst zuletzt in diesem Block, direkt vor
     // den Sektionen der aktiven Liste, die sie betrifft.
     const kontoLink = `<a href="#" class="nav-konto" data-nav-konto title="Konto verwalten"><span class="nav-konto-icon">👤</span> ${escapeHtml(kontoNavLabel())}</a>`;
+    const streamingLink = `<a href="#" class="nav-streaming" data-nav-streaming title="Streaming-Anbieter wählen"><span class="nav-streaming-icon">📺</span> Streaming</a>`;
     const groupLink = `<a href="#" class="nav-groups" data-nav-groups title="Gruppen verwalten"><span class="nav-groups-icon">👥</span> ${escapeHtml(groupNavLabel())}</a>`;
     const listenLink = `<a href="#" class="nav-listen" data-nav-listen title="Filmreihe wechseln"><span class="nav-listen-icon">📚</span> ${escapeHtml(listeNavLabel())}</a>`;
     // Auf Desktop senkrechter Strich, auf Mobil waagerechte Linie (siehe CSS)
@@ -79,7 +80,7 @@ function renderNav() {
     const links = MOVIE_DATA.filter(section => section.id !== 'inhalt').map((section, i) =>
         `<a href="#${section.id}" data-section-id="${section.id}" data-fill-key="${section.id}">${i + 1}. ${escapeHtml(section.navLabel)} <span class="nav-progress" data-progress-key="${section.id}"></span></a>`
     ).join('');
-    nav.innerHTML = closeButton + homeLink + trenner + kontoLink + groupLink + listenLink + trenner + links;
+    nav.innerHTML = closeButton + homeLink + trenner + kontoLink + streamingLink + groupLink + listenLink + trenner + links;
 
     // Klick-Handler per addEventListener statt Inline-onclick binden.
     // Robuster als String-Interpolation in onclick-Attributen, da so
@@ -109,6 +110,15 @@ function renderNav() {
             window.openKontoPanel();
         } else {
             console.warn('Kontoverwaltung noch nicht geladen.');
+        }
+    });
+    nav.querySelector('[data-nav-streaming]').addEventListener('click', event => {
+        event.preventDefault();
+        closeSidebar();
+        if (typeof window.openStreamingPanel === 'function') {
+            window.openStreamingPanel();
+        } else {
+            console.warn('Streaming-Anbieterauswahl noch nicht geladen.');
         }
     });
     nav.querySelector('[data-nav-groups]').addEventListener('click', event => {
@@ -161,6 +171,12 @@ window.getEigeneListenAnzahl = () => eigeneListenLesen().length;
 window.getEigeneListenMax = () => EIGENE_LISTEN_MAX;
 window.getKontoListenAnzahl = () => kontoListenCacheLesen().length;
 window.getKontoListenMax = () => KONTO_LISTEN_MAX;
+
+// Streaming-Anbieterauswahl (Issue #33) - für die Auswahl-Ansicht in groups.js
+window.getStreamingAnbieterListe = () => STREAMING_ANBIETER.map(a => ({ ...a }));
+window.getAusgewaehlteAnbieter = ausgewaehlteAnbieterLesen;
+window.getAnbieterMax = () => AUSGEWAEHLTE_ANBIETER_MAX;
+window.anbieterAuswahlUmschalten = anbieterAuswahlUmschalten;
 
 // Scrollt sanft nach ganz oben und schließt dabei das mobile Drawer-Menü
 function goHome(event) {
@@ -472,7 +488,7 @@ function alleMovieTmdbIds() {
     MOVIE_DATA.forEach(section => {
         section.movies.forEach(movie => {
             const tmdbId = extractTmdbId(movie.tmdb);
-            if (tmdbId) liste.push({ id: movie.id, tmdbId });
+            if (tmdbId) liste.push({ id: movie.id, tmdbId, tmdbUrl: movie.tmdb });
         });
     });
     return liste;
@@ -545,6 +561,191 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
     tmdbDetailsCacheSchreiben(cache);
 }
 
+// --- Streaming-Anbieter (Issue #33) ---
+// Rein lokale Funktion: Nutzer wählen bis zu 4 bevorzugte Anbieter, die
+// Auswahl wird nirgendwo hochgeladen. Bewusst eine feste, kuratierte Liste
+// statt aller von TMDB für DE gemeldeten Anbieter (Shops wie "Apple TV
+// Store" oder "Google Play Movies" wären für die meisten Nutzer nur
+// Rauschen) - IDs/Logos stammen von
+// GET /watch/providers/movie?watch_region=DE, nicht geraten.
+// Liste bewusst auf Filmanbieter zugeschnitten (Nutzer-Feedback: reine
+// TV-/Serien-Sender bringen hier wenig). "Sky" und "maxdome" existieren bei
+// TMDB für DE nur unter diesen Namen (kein separater "Sky"- bzw.
+// "maxdome"-Eintrag ohne Zusatz) - Namen daher unverändert von TMDB
+// übernommen, um nicht fälschlich ein Abo-Angebot zu suggerieren, wo es
+// sich um Sky Go (App-Zugang zum bestehenden Abo) bzw. einen reinen
+// Leihen/Kaufen-Shop (maxdome Store) handelt.
+const STREAMING_ANBIETER = [
+    { id: 9,    name: 'Amazon Prime Video', logo: '/pvske1MyAoymrs5bguRfVqYiM9a.jpg' },
+    { id: 10,   name: 'Amazon Video',       logo: '/qR6FKvnPBx2O37FDg8PNM7efwF3.jpg' },
+    { id: 350,  name: 'Apple TV',           logo: '/mcbz1LgtErU9p4UdbZ0rG6RTWHX.jpg' },
+    { id: 337,  name: 'Disney Plus',        logo: '/97yvRBw1GzX7fXprcF80er19ot.jpg' },
+    { id: 178,  name: 'MagentaTV',          logo: '/nCsFBTEmlCMc5NA4fwPuluTz6AO.jpg' },
+    { id: 2412, name: 'Magenta TV+',        logo: '/qqTyjCCJuuARytrY7rNRAKka1VF.jpg' },
+    { id: 20,   name: 'maxdome Store',      logo: '/cBN4jd4wPq6on0kESiTlevqvlnL.jpg' },
+    { id: 8,    name: 'Netflix',            logo: '/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg' },
+    { id: 531,  name: 'Paramount Plus',     logo: '/h5DcR0J2EESLitnhR8xLG1QymTE.jpg' },
+    { id: 29,   name: 'Sky Go',             logo: '/vDdk3LyjWkYlfCtkrhkjFKFK1Hg.jpg' },
+    { id: 130,  name: 'Sky Store',          logo: '/59TxOAYcoFaufd6CWm465oPchD.jpg' },
+    { id: 30,   name: 'WOW',                logo: '/9r5zFWuYnwjzO1JrNjSbLQwUc3P.jpg' }
+];
+
+const AUSGEWAEHLTE_ANBIETER_KEY = 'selected_providers';
+// Bewusst 8 statt 4 (Issue #33 CR): bei mehreren Haushalts-Abos (z. B.
+// Amazon + Magenta mit je zwei Angeboten) reichen 4 Plätze schnell nicht -
+// da kaum ein Film gleichzeitig bei allen 8 verfügbar ist, bleibt die Karte
+// trotzdem übersichtlich.
+const AUSGEWAEHLTE_ANBIETER_MAX = 8;
+
+function ausgewaehlteAnbieterLesen() {
+    try {
+        const rohdaten = JSON.parse(localStorage.getItem(AUSGEWAEHLTE_ANBIETER_KEY) || '[]');
+        return Array.isArray(rohdaten) ? rohdaten : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function ausgewaehlteAnbieterSchreiben(ids) {
+    try {
+        localStorage.setItem(AUSGEWAEHLTE_ANBIETER_KEY, JSON.stringify(ids));
+    } catch (e) {
+        console.warn('Anbieterauswahl konnte nicht gespeichert werden:', e);
+    }
+}
+
+// An/abwählen eines Anbieters. Gibt zurück, ob die Änderung angewendet
+// wurde - schlägt nur fehl, wenn beim Anwählen das Maximum bereits
+// erreicht ist (die Checkboxen sind dann zwar schon deaktiviert, diese
+// Prüfung bleibt aber die eigentliche Quelle der Wahrheit).
+function anbieterAuswahlUmschalten(id) {
+    const aktuelle = ausgewaehlteAnbieterLesen();
+    const index = aktuelle.indexOf(id);
+    if (index >= 0) {
+        aktuelle.splice(index, 1);
+    } else if (aktuelle.length < AUSGEWAEHLTE_ANBIETER_MAX) {
+        aktuelle.push(id);
+    } else {
+        return { ok: false, ausgewaehlt: aktuelle };
+    }
+    ausgewaehlteAnbieterSchreiben(aktuelle);
+    anbieterKartenAktualisieren();
+    return { ok: true, ausgewaehlt: aktuelle };
+}
+
+const TMDB_PROVIDERS_CACHE_KEY = 'mcu-tmdb-providers-cache';
+const TMDB_PROVIDERS_GUELTIG_MS = 7 * 24 * 60 * 60 * 1000; // 7 Tage
+
+function tmdbProvidersCacheLesen() {
+    try {
+        return JSON.parse(localStorage.getItem(TMDB_PROVIDERS_CACHE_KEY) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function tmdbProvidersCacheSchreiben(cache) {
+    try {
+        localStorage.setItem(TMDB_PROVIDERS_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+        console.warn('Anbieter-Cache konnte nicht gespeichert werden:', e);
+    }
+}
+
+// Setzt die Streaming-Logos auf einer einzelnen Filmkarte anhand der
+// ausgewählten Anbieter und deren tatsächlicher Verfügbarkeit (flatrate
+// vs. nur leihbar/käuflich). JustWatch-Attribution erscheint bewusst HIER,
+// direkt bei den Logos auf jeder Karte, nicht nur zentral im
+// Infos-Bereich - TMDB verlangt einen Hinweis "on each media item".
+// Aufbau der Zeile: JustWatch-Pfeil (verlinkt) | Anbieter-Logos | Text.
+// Der JustWatch-Link ist bewusst dieselbe TMDB-URL wie beim TMDB-Icon, nur
+// um "/watch" erweitert (z. B. .../movie/557-spider-man/watch) - TMDBs
+// eigene API liefert keine echte justwatch.com-URL heraus (CORS verhindert
+// zudem das Auslesen der TMDB-Webseite selbst), diese Erweiterung ist der
+// verlässliche, offizielle Weg zur Anbieter-Übersicht des Films.
+function zeigeAnbieterAufKarte(movieId, anbieter, tmdbUrl) {
+    const slot = document.querySelector(`[data-anbieter-slot="${movieId}"]`);
+    if (!slot) return;
+
+    const ausgewaehlt = ausgewaehlteAnbieterLesen();
+    const logos = ausgewaehlt.map(id => {
+        const info = STREAMING_ANBIETER.find(a => a.id === id);
+        if (!info) return '';
+        const istFlatrate = anbieter.flatrate.includes(id);
+        const istKauf = !istFlatrate && anbieter.kauf.includes(id);
+        if (!istFlatrate && !istKauf) return '';
+        const titel = istFlatrate ? `Im Abo bei ${info.name}` : `Leihen/Kaufen bei ${info.name}`;
+        return `<img class="anbieter-logo ${istFlatrate ? 'anbieter-flatrate' : 'anbieter-kauf'}" src="https://image.tmdb.org/t/p/w45${info.logo}" alt="${escapeHtml(info.name)}" title="${escapeHtml(titel)}" loading="lazy">`;
+    }).filter(Boolean).join('');
+
+    if (!logos) { slot.innerHTML = ''; return; }
+
+    const jwIcon = `<img class="justwatch-icon" src="justwatch-icon.svg" alt="JustWatch" loading="lazy">`;
+    const jwVerlinkt = tmdbUrl
+        ? `<a href="${escapeHtml(tmdbUrl)}/watch" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="Streaming-Verfügbarkeit auf JustWatch ansehen" aria-label="Streaming-Verfügbarkeit auf JustWatch ansehen">${jwIcon}</a>`
+        : jwIcon;
+
+    slot.innerHTML = jwVerlinkt + logos + `<span class="anbieter-attribution">Powered by JustWatch</span>`;
+}
+
+// Wendet den zuletzt geladenen Anbieter-Cache erneut auf alle sichtbaren
+// Karten an - ohne Netzwerkzugriff. Wird nach einer Änderung der Auswahl
+// aufgerufen, damit die Karten sofort reagieren.
+function anbieterKartenAktualisieren() {
+    const cache = tmdbProvidersCacheLesen();
+    alleMovieTmdbIds().forEach(({ id, tmdbId, tmdbUrl }) => {
+        const eintrag = cache[tmdbId];
+        if (eintrag) {
+            zeigeAnbieterAufKarte(id, eintrag.anbieter, tmdbUrl);
+        } else {
+            const slot = document.querySelector(`[data-anbieter-slot="${id}"]`);
+            if (slot) slot.innerHTML = '';
+        }
+    });
+}
+
+// Lädt für alle übergebenen Filme die Verfügbarkeit bei Streaming-Anbietern
+// in Deutschland nach - Pattern identisch zu tmdbDetailsFuerAlleLaden
+// (Cache-Treffer sofort anzeigen, Rest parallel nachladen, 7 Tage gültig).
+// Schlägt eine Einzelabfrage fehl (offline, API-Fehler), bleibt die Karte
+// einfach ohne Streaming-Logos - kein Abbruch für die anderen Filme.
+async function tmdbProvidersFuerAlleLaden(movieList) {
+    const cache = tmdbProvidersCacheLesen();
+    const jetzt = Date.now();
+    const zuLaden = [];
+
+    movieList.forEach(({ id, tmdbId, tmdbUrl }) => {
+        const eintrag = cache[tmdbId];
+        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_PROVIDERS_GUELTIG_MS) {
+            zeigeAnbieterAufKarte(id, eintrag.anbieter, tmdbUrl);
+        } else {
+            zuLaden.push({ id, tmdbId, tmdbUrl });
+        }
+    });
+
+    if (zuLaden.length === 0) return;
+
+    await Promise.all(zuLaden.map(async ({ id, tmdbId, tmdbUrl }) => {
+        try {
+            const url = `https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers?api_key=${TMDB_API_KEY}`;
+            const antwort = await fetch(url);
+            if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
+            const daten = await antwort.json();
+            const de = (daten.results && daten.results.DE) || {};
+            const anbieter = {
+                flatrate: (de.flatrate || []).map(a => a.provider_id),
+                kauf: [...(de.rent || []), ...(de.buy || [])].map(a => a.provider_id)
+            };
+            cache[tmdbId] = { anbieter, cachedAt: Date.now() };
+            zeigeAnbieterAufKarte(id, anbieter, tmdbUrl);
+        } catch (err) {
+            console.warn('Anbieter konnten nicht geladen werden für', id, err);
+        }
+    }));
+
+    tmdbProvidersCacheSchreiben(cache);
+}
+
 function waehleTrailer(videos) {
     if (!Array.isArray(videos)) return null;
     const kandidaten = videos.filter(v => v.site === 'YouTube' && v.type === 'Trailer');
@@ -591,21 +792,24 @@ function renderMovieCard(movie, eigeneKarte) {
     const zusatzAttribute = eigeneKarte ? eigeneKarte.attribute : '';
     const werkzeugeHtml = eigeneKarte ? eigeneKarte.werkzeugeHtml : '';
     return `
-<div class="movie-card${watchedClass}" data-movie-id="${movie.id}"${zusatzAttribute} onclick="openOverlay(this)">
+<div class="movie-card${watchedClass}" data-movie-id="${movie.id}"${zusatzAttribute}>
     ${werkzeugeHtml}
-    <div class="movie-poster">
+    <div class="movie-poster" onclick="event.stopPropagation(); openOverlay(this.closest('.movie-card'))">
         <img src="${movie.poster}" alt="Filmposter" loading="lazy" onerror="handlePosterError(this)">
     </div>
     <div class="movie-content">
-        <div class="movie-title-row">
-            <div class="movie-title laedt" data-titel-slot="${movie.id}">Lädt…</div>
-            ${renderMovieRuntime(movie)}
+        <div class="movie-oben" onclick="obenBereichAngeklickt(event, this.closest('.movie-card'))">
+            <div class="movie-title-row">
+                <div class="movie-title laedt" data-titel-slot="${movie.id}">Lädt…</div>
+                ${renderMovieRuntime(movie)}
+            </div>
+            <div class="movie-desc">${escapeHtml(movie.desc)}</div>
         </div>
-        <div class="movie-desc">${escapeHtml(movie.desc)}</div>
         <div class="movie-meta-row">
             ${renderMovieMeta(movie)}
             ${renderRatingWidget(movie.id)}
         </div>
+        <div class="movie-anbieter-row" data-anbieter-slot="${movie.id}"></div>
         ${renderGroupSlot(movie.id)}
     </div>
 </div>`;
@@ -647,6 +851,7 @@ ${section.movies.map(m => renderMovieCard(m)).join('')}
     // tmdbDetailsFuerAlleLaden). Läuft im Hintergrund, blockiert also
     // nicht den Aufbau der restlichen Karte.
     tmdbDetailsFuerAlleLaden(alleMovieTmdbIds());
+    tmdbProvidersFuerAlleLaden(alleMovieTmdbIds());
 }
 
 // Lädt moviedata.json und rendert erst danach Navigation und Filmkarten.

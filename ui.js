@@ -22,6 +22,20 @@ function openOverlay(cardElement) {
     if (trailerBereich) trailerBereich.innerHTML = '';
 }
 
+// Klick auf Titel/Beschreibung (".movie-oben"). Auf Desktop liegt der Text
+// neben dem Poster in einem eigenen Bereich - dort öffnet ausschließlich
+// das sichtbare Poster die Großansicht. Auf Mobile liegt der Text dagegen
+// ÜBER dem als Kartenhintergrund genutzten Poster (siehe CSS), weshalb dort
+// zusätzlich Titel/Beschreibung anklickbar sind - der untere Bereich mit
+// TMDB/Trailer/Streaming-Anbietern bleibt auf beiden Ansichten bewusst
+// nicht klickbar, da er eigene interaktive Elemente enthält.
+function obenBereichAngeklickt(event, cardElement) {
+    event.stopPropagation();
+    if (window.matchMedia('(max-width: 768px)').matches) {
+        openOverlay(cardElement);
+    }
+}
+
 // Wird vom "🎬 Trailer"-Button auf der Filmkarte aufgerufen: zeigt NUR
 // den Trailer, kein Poster daneben - dafür wird dasselbe Overlay
 // genutzt (Hintergrund, Schließen-Button), nur das Poster-Bild bleibt

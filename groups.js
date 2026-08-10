@@ -1851,6 +1851,41 @@ function abschnittListen() {
         ${anlegenBereich}`;
 }
 
+// --- Streaming-Anbieter (Issue #33) ---
+// Rein lokale Auswahl (max. 4), Logik/Speicherung liegt in app.js
+// (window.getStreamingAnbieterListe/-getAusgewaehlteAnbieter/-anbieterAuswahlUmschalten),
+// hier nur die Darstellung im bestehenden Fenster-Muster.
+
+function abschnittStreaming() {
+    const anbieterListe = typeof window.getStreamingAnbieterListe === 'function'
+        ? window.getStreamingAnbieterListe() : [];
+    const ausgewaehlt = typeof window.getAusgewaehlteAnbieter === 'function'
+        ? window.getAusgewaehlteAnbieter() : [];
+    const max = typeof window.getAnbieterMax === 'function' ? window.getAnbieterMax() : 4;
+
+    const eintraege = anbieterListe.map(a => {
+        const istAktiv = ausgewaehlt.includes(a.id);
+        const deaktiviert = !istAktiv && ausgewaehlt.length >= max;
+        return `
+        <label class="gruppen-check anbieter-check${deaktiviert ? ' deaktiviert' : ''}">
+            <input type="checkbox" class="anbieter-checkbox" data-anbieter-id="${a.id}"
+                   ${istAktiv ? 'checked' : ''} ${deaktiviert ? 'disabled' : ''}>
+            <img class="anbieter-check-logo" src="https://image.tmdb.org/t/p/w45${a.logo}" alt="" loading="lazy">
+            ${sicher(a.name)}
+        </label>`;
+    }).join('');
+
+    return `
+        <p class="gruppen-hinweis">
+            Wähle bis zu ${max} Streaming-Anbieter aus. Ist ein Film dort verfügbar, erscheint
+            sein Logo auf der Filmkarte - kräftig, wenn er im Abo enthalten ist, blass, wenn er
+            nur leihbar oder käuflich ist. Die Auswahl bleibt rein lokal auf diesem Gerät.
+        </p>
+        <div class="anbieter-liste">${eintraege}</div>
+        <p class="gruppen-hinweis anbieter-zaehler">${ausgewaehlt.length}/${max} ausgewählt</p>
+        <p class="tmdb-erklaerung">Streaming-Verfügbarkeit bereitgestellt von JustWatch via TMDB.</p>`;
+}
+
 // --- Infos zum Fan Guide (Issue #24) ---
 // Enthält die von TMDB vorgeschriebene Attribution. Die Vorgabe verlangt
 // einen Bereich vom Typ "About"/"Credits", den wörtlichen englischen
@@ -1873,6 +1908,8 @@ function abschnittInfos() {
                 <li>Den eigenen Fortschritt verfolgen - bewertete Filme gelten als gesehen</li>
                 <li>Optional eine Gruppe anlegen und sehen, wie andere dieselben Filme
                     bewertet haben</li>
+                <li>Deine Streaming-Anbieter auswählen und anzeigen lassen, wo ein Film
+                    verfügbar ist</li>
             </ul>
             <p>Zum Bewerten ist keine Anmeldung nötig. Die Bewertungen bleiben dann
                ausschließlich auf deinem Gerät.</p>
@@ -1911,6 +1948,28 @@ function abschnittInfos() {
         </div>
 
         <div class="ds-block">
+            <div class="ds-titel">Streaming-Verfügbarkeit</div>
+            <p>Wo ein Film per Stream verfügbar ist, stammt ebenfalls von TMDB - die
+               zugrunde liegenden Daten liefert JustWatch. Die Anzeige der ausgewählten
+               Anbieter-Logos ist rein informativ, es gibt keine Kauf- oder
+               Buchungsfunktion. Ein Klick auf das JustWatch-Symbol bei den Anbieter-Logos
+               führt zur Übersichtsseite des Films bei TMDB, auf der auch weitere, dort
+               verfügbare Streaming-Anbieter aufgeführt sind.</p>
+
+            <div class="tmdb-attribution">
+                <div class="tmdb-untertitel">Hinweis zur Datenquelle</div>
+                <div class="justwatch-attribution-zeile">
+                    <img src="justwatch-icon.svg" alt="" class="justwatch-attribution-logo"
+                         onerror="this.style.display='none'">
+                    <strong>JustWatch</strong>
+                </div>
+                <p class="tmdb-notice">
+                    Streaming-Daten werden bereitgestellt von JustWatch via TMDB.
+                </p>
+            </div>
+        </div>
+
+        <div class="ds-block">
             <div class="ds-titel">Datenschutz</div>
             <p>Welche Daten gespeichert werden und wofür, steht in den
                <button class="gruppen-link-btn" data-aktion="datenschutz">Datenschutzhinweisen</button>.</p>
@@ -1940,9 +1999,10 @@ function abschnittDatenschutz() {
 
         <div class="ds-block">
             <div class="ds-titel">Ohne Anmeldung: nichts verlässt dein Gerät</div>
-            <p>Wer nur Filme bewerten möchte, braucht keinen Account. Bewertungen
-               werden dann ausschließlich lokal auf deinem Gerät gespeichert und
-               nirgendwohin übertragen.</p>
+            <p>Wer nur Filme bewerten oder seine bevorzugten Streaming-Anbieter
+               auswählen möchte, braucht keinen Account. Beides bleibt dann
+               ausschließlich lokal auf deinem Gerät (Details siehe unten unter
+               „Was wird auf deinem Gerät gespeichert?").</p>
         </div>
 
         <div class="ds-block">
@@ -1976,8 +2036,9 @@ function abschnittDatenschutz() {
         <div class="ds-block">
             <div class="ds-titel">Was wird auf deinem Gerät gespeichert?</div>
             <ul>
-                <li>Bewertungen, Gruppenmitgliedschaften und die zuletzt gewählte
-                    Gruppe im lokalen Speicher deines Geräts</li>
+                <li>Bewertungen, Gruppenmitgliedschaften, die zuletzt gewählte Gruppe
+                    und deine ausgewählten Streaming-Anbieter im lokalen Speicher
+                    deines Geräts</li>
                 <li>Technische Angaben zum Angemeldet-Bleiben (durch Firebase)</li>
             </ul>
             <p>Das gilt gleichermaßen, ob du die Seite im Browser öffnest oder über
@@ -2029,9 +2090,12 @@ function abschnittDatenschutz() {
 
         <div class="ds-block">
             <div class="ds-titel">Links zu externen Seiten</div>
-            <p>Auf den Filmkarten findest du Verweise zu IMDb und TMDB. Beim Anklicken
-               verlässt du diese Seite; ab dann gelten die Datenschutzbestimmungen des
-               jeweiligen Anbieters.</p>
+            <p>Auf den Filmkarten findest du Verweise zu TMDB. Der JustWatch-Link bei
+               den Streaming-Anbieter-Logos führt ebenfalls zu einer TMDB-Seite, von der
+               aus sich - je nach Verfügbarkeit - weiter zu JustWatch klicken lässt; wir
+               verlinken also nicht direkt zu JustWatch, sondern nur über diesen Umweg
+               über TMDB. Beim Anklicken verlässt du diese Seite; ab dann gelten die
+               Datenschutzbestimmungen des jeweiligen Anbieters.</p>
             <p>Für die Inhalte externer Seiten übernehme ich keine Haftung. Zum
                Zeitpunkt der Verlinkung waren keine rechtswidrigen Inhalte erkennbar.
                Sollte mir eine Rechtsverletzung bekannt werden, entferne ich den
@@ -2079,6 +2143,14 @@ function zeichneFenster() {
     if (ansicht === 'datenschutz') {
         if (titelEl) titelEl.textContent = 'Datenschutzhinweise';
         inhalt.innerHTML = abschnittDatenschutz();
+        return;
+    }
+
+    // Streaming-Anbieterauswahl (Issue #33) - eigener Nav-Punkt, bewusst
+    // unabhängig vom Login-Status, da die Auswahl rein lokal ist.
+    if (ansicht === 'streaming') {
+        if (titelEl) titelEl.textContent = 'Streaming-Anbieter';
+        inhalt.innerHTML = abschnittStreaming();
         return;
     }
 
@@ -2138,6 +2210,10 @@ function oeffneGruppenFenster() {
 
 function oeffneKontoFenster() {
     fensterOeffnen('konto');
+}
+
+function oeffneStreamingFenster() {
+    fensterOeffnen('streaming');
 }
 
 function schliesseGruppenFenster() {
@@ -2343,6 +2419,18 @@ function fensterKlicks(event) {
 
 // Auswahlliste löst kein Klick-Ereignis aus, deshalb getrennt behandelt.
 function fensterAenderungen(event) {
+    if (event.target.classList.contains('anbieter-checkbox')) {
+        const id = Number(event.target.dataset.anbieterId);
+        const ergebnis = typeof window.anbieterAuswahlUmschalten === 'function'
+            ? window.anbieterAuswahlUmschalten(id)
+            : { ok: false };
+        if (!ergebnis.ok) {
+            const max = typeof window.getAnbieterMax === 'function' ? window.getAnbieterMax() : 4;
+            meldung(`Maximal ${max} Anbieter auswählbar - zuerst einen abwählen.`, true);
+        }
+        zeichneFenster();
+        return;
+    }
     if (event.target.id === 'gruppen-auswahl') {
         aktiveGruppeSetzen(event.target.value);
         gruppenBewertungen = [];
@@ -2421,6 +2509,7 @@ window.addEventListener('offline', () => {
 // Für andere Dateien erreichbar machen
 window.openGroupPanel       = oeffneGruppenFenster;
 window.openKontoPanel       = oeffneKontoFenster;
+window.openStreamingPanel   = oeffneStreamingFenster;
 window.openListenPanel      = () => fensterOeffnen('listen');
 window.openDatenschutz      = () => {
     vorherigeAnsicht = 'konto';
