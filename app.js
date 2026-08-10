@@ -826,6 +826,14 @@ let sortierModusAktiv = false;
 let ziehenderFilmId = null;
 let teilenPanelOffenFuer = null;
 
+// Zustand der TMDB-Live-Suche im "Film hinzufügen"-Formular (Issue #49).
+// eigenerSucheErgebnisse und eigenerAusgewaehlterFilm bleiben bewusst nur
+// im Speicher (kein localStorage) - die Suche ist reine Formular-Hilfe,
+// keine dauerhaft zu speichernde Information.
+let eigenerSucheErgebnisse = [];
+let eigenerAusgewaehlterFilm = null; // { tmdbId, titel, jahr, posterPfad }
+let eigenerSucheDebounceTimer = null;
+
 function eigeneListenLesen() {
     try {
         const roh = JSON.parse(localStorage.getItem(EIGENE_LISTEN_KEY) || '[]');
@@ -1106,6 +1114,27 @@ async function eigeneListeTmdbDetailsHolen(tmdbId) {
         if (!daten.poster_path) daten.poster_path = datenEn.poster_path;
     }
     return daten;
+}
+
+// Live-Suche über den TMDB Search-Movie-Endpunkt (Issue #49). Liefert die
+// ersten Treffer mit Titel, Erscheinungsjahr und Poster-Pfad - genug für
+// eine Vorschau, ohne für jeden Treffer einzeln die vollen Filmdetails
+// abzufragen (das passiert erst beim tatsächlichen Hinzufügen).
+const EIGENE_SUCHE_TREFFER_MAX = 8;
+
+async function eigeneListeTmdbSuchen(suchtext) {
+    const url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&language=de-DE&query=${encodeURIComponent(suchtext)}`;
+    const antwort = await fetch(url);
+    if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
+    const daten = await antwort.json();
+    return (daten.results || [])
+        .slice(0, EIGENE_SUCHE_TREFFER_MAX)
+        .map(r => ({
+            tmdbId: r.id,
+            titel: r.title || r.original_title || 'Ohne Titel',
+            jahr: (r.release_date || '').slice(0, 4),
+            posterPfad: r.poster_path || null
+        }));
 }
 
 // Sammelt Kurz- und Langnamen aller Listen (klein geschrieben, getrimmt),
@@ -1435,11 +1464,15 @@ function sortierModusUmschalten() {
 function eigenerFormularOeffnen() {
     eigenerFormularOffen = true;
     eigenerBeschreibungModus = 'tmdb';
+    eigenerAusgewaehlterFilm = null;
+    eigenerSucheErgebnisse = [];
     renderContent();
 }
 
 function eigenerFormularSchliessen() {
     eigenerFormularOffen = false;
+    eigenerAusgewaehlterFilm = null;
+    eigenerSucheErgebnisse = [];
     renderContent();
 }
 
@@ -1453,22 +1486,81 @@ function eigenerFilmFehlerAnzeigen(text) {
     if (el) { el.textContent = text; el.style.display = 'block'; }
 }
 
-async function eigenerFilmAbsenden(listeId) {
-    const link = (document.getElementById('eigener-film-link')?.value || '').trim();
-    const eigeneBeschreibung = document.getElementById('eigener-film-beschreibung')?.value || '';
+// Läuft bei jeder Eingabe im Suchfeld, aktualisiert aber gezielt nur den
+// Ergebnis-Container per innerHTML statt renderContent() aufzurufen - ein
+// voller Neuaufbau würde das Suchfeld ersetzen und damit bei jedem
+// Tastendruck den Cursor/Fokus verlieren.
+function eigenerFilmSucheEingabe(wert, listeId) {
+    clearTimeout(eigenerSucheDebounceTimer);
+    const suchtext = wert.trim();
+    const container = document.getElementById('eigener-film-ergebnisse');
+    if (!container) return;
 
-    if (!link) {
-        eigenerFilmFehlerAnzeigen('Bitte einen TMDB-Link einfügen.');
+    if (suchtext.length < 2) {
+        eigenerSucheErgebnisse = [];
+        container.innerHTML = '';
         return;
     }
 
-    const ergebnis = await eigenerListeFilmHinzufuegen(listeId, link, eigenerBeschreibungModus, eigeneBeschreibung);
+    eigenerSucheDebounceTimer = setTimeout(async () => {
+        container.innerHTML = '<p class="eigene-hinweis">Suche läuft...</p>';
+        try {
+            eigenerSucheErgebnisse = await eigeneListeTmdbSuchen(suchtext);
+            container.innerHTML = renderEigenerSucheErgebnisse();
+        } catch (e) {
+            console.warn('TMDB-Suche fehlgeschlagen:', e);
+            eigenerSucheErgebnisse = [];
+            container.innerHTML = '<p class="eigene-fehler">Suche fehlgeschlagen - bitte später erneut versuchen.</p>';
+        }
+    }, 400);
+}
+
+function renderEigenerSucheErgebnisse() {
+    if (eigenerSucheErgebnisse.length === 0) {
+        return '<p class="eigene-hinweis">Keine Treffer gefunden.</p>';
+    }
+    return eigenerSucheErgebnisse.map((treffer, index) => `
+        <div class="eigene-suche-treffer" onclick="eigenerFilmAuswaehlen(${index})">
+            ${treffer.posterPfad
+                ? `<img src="https://image.tmdb.org/t/p/w92${treffer.posterPfad}" alt="" class="eigene-suche-poster">`
+                : '<div class="eigene-suche-poster eigene-suche-poster-leer"></div>'}
+            <span>${escapeHtml(treffer.titel)}${treffer.jahr ? ` (${treffer.jahr})` : ''}</span>
+        </div>
+    `).join('');
+}
+
+function eigenerFilmAuswaehlen(index) {
+    const treffer = eigenerSucheErgebnisse[index];
+    if (!treffer) return;
+    eigenerAusgewaehlterFilm = treffer;
+    eigenerSucheErgebnisse = [];
+    renderContent();
+}
+
+function eigenerFilmAuswahlZuruecksetzen() {
+    eigenerAusgewaehlterFilm = null;
+    eigenerSucheErgebnisse = [];
+    renderContent();
+}
+
+async function eigenerFilmAbsenden(listeId) {
+    const eigeneBeschreibung = document.getElementById('eigener-film-beschreibung')?.value || '';
+
+    if (!eigenerAusgewaehlterFilm) {
+        eigenerFilmFehlerAnzeigen('Bitte zuerst einen Film aus der Suche auswählen.');
+        return;
+    }
+
+    const tmdbLink = `https://www.themoviedb.org/movie/${eigenerAusgewaehlterFilm.tmdbId}`;
+    const ergebnis = await eigenerListeFilmHinzufuegen(listeId, tmdbLink, eigenerBeschreibungModus, eigeneBeschreibung);
     if (!ergebnis.ok) {
         eigenerFilmFehlerAnzeigen(ergebnis.fehler);
         return;
     }
 
     eigenerFormularOffen = false;
+    eigenerAusgewaehlterFilm = null;
+    eigenerSucheErgebnisse = [];
     await ladeUndRendereAktiveListe();
 }
 
@@ -1483,11 +1575,22 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
 
     const limitErreicht = eigeneListe.filme.length >= EIGENE_LISTE_FILME_MAX;
 
+    const sucheBlock = eigenerAusgewaehlterFilm ? `
+        <div class="eigene-suche-auswahl">
+            ${eigenerAusgewaehlterFilm.posterPfad
+                ? `<img src="https://image.tmdb.org/t/p/w92${eigenerAusgewaehlterFilm.posterPfad}" alt="" class="eigene-suche-poster">`
+                : '<div class="eigene-suche-poster eigene-suche-poster-leer"></div>'}
+            <span>${escapeHtml(eigenerAusgewaehlterFilm.titel)}${eigenerAusgewaehlterFilm.jahr ? ` (${eigenerAusgewaehlterFilm.jahr})` : ''}</span>
+            <button class="gruppen-btn schmal grau" onclick="eigenerFilmAuswahlZuruecksetzen()">Ändern</button>
+        </div>` : `
+        <div class="gruppen-zeile">
+            <input type="text" id="eigener-film-suche" placeholder="Filmtitel suchen..." oninput="eigenerFilmSucheEingabe(this.value, '${eigeneListe.id}')">
+        </div>
+        <div id="eigener-film-ergebnisse" class="eigene-suche-ergebnisse"></div>`;
+
     const formular = eigenerFormularOffen ? `
         <div class="eigene-formular">
-            <div class="gruppen-zeile">
-                <input type="text" id="eigener-film-link" placeholder="TMDB-Link einfügen, z. B. https://www.themoviedb.org/movie/1726-iron-man">
-            </div>
+            ${sucheBlock}
             <label class="gruppen-check">
                 <input type="radio" name="eigene-beschreibung" value="tmdb" ${eigenerBeschreibungModus === 'tmdb' ? 'checked' : ''} onchange="eigeneBeschreibungModusSetzen('tmdb')">
                 TMDB-Beschreibung übernehmen

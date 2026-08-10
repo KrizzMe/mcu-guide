@@ -533,6 +533,50 @@
             margin: 6px 0 10px;
         }
 
+        /* TMDB-Live-Suche im "Film hinzufügen"-Formular (Issue #49) */
+        .eigene-suche-ergebnisse {
+            max-height: 260px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        .eigene-suche-treffer,
+        .eigene-suche-auswahl {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 4px;
+        }
+
+        .eigene-suche-treffer {
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        .eigene-suche-treffer:hover {
+            background: rgba(255,255,255,0.06);
+        }
+
+        .eigene-suche-auswahl {
+            margin-bottom: 10px;
+        }
+
+        .eigene-suche-auswahl .gruppen-btn {
+            margin-left: auto;
+        }
+
+        .eigene-suche-poster {
+            width: 32px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .eigene-suche-poster-leer {
+            background: rgba(255,255,255,0.06);
+        }
+
         /* Entfernen-Button und Sortier-Pfeile sitzen oben rechts auf der
            Filmkarte - dieselbe Position wie .overlay-schliessen, nur
            kleiner, da mehrere Karten gleichzeitig sichtbar sind. */
