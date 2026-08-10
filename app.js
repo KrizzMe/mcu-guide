@@ -574,7 +574,12 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
 
     movieList.forEach(({ id, tmdbId }) => {
         const eintrag = cache[tmdbId];
-        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS) {
+        // 'altersfreigabe' in eintrag statt eintrag.altersfreigabe: Alte
+        // Cache-Einträge von vor Issue #67 haben das Feld gar nicht (auch
+        // nicht als null) und würden sonst bis zu 7 Tage lang fälschlich
+        // als "gültig, aber ohne Freigabe" durchgehen statt neu geladen
+        // zu werden.
+        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS && 'altersfreigabe' in eintrag) {
             titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit, eintrag.altersfreigabe);
         } else {
             zuLaden.push({ id, tmdbId });
