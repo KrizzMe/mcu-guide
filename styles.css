@@ -441,6 +441,27 @@
             font-size: 0.95em;
         }
 
+        /* Altersfreigabe (FSK) rechts neben dem Titel, links von der
+           Laufzeit (Issue #67). Bleibt leer, solange TMDB noch nicht
+           geantwortet hat oder keine deutsche Freigabe kennt - :empty
+           blendet den Rahmen dann komplett aus, statt eine leere Box zu zeigen. */
+        .movie-altersfreigabe {
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: var(--text-muted);
+            border: 1px solid var(--text-muted);
+            border-radius: 4px;
+            padding: 1px 6px;
+            white-space: nowrap;
+        }
+
+        .movie-altersfreigabe:empty {
+            display: none;
+        }
+
         .meta-icon {
             height: 18px;
             width: auto;
@@ -1482,7 +1503,8 @@
 
             .movie-title,
             .movie-desc,
-            .movie-runtime {
+            .movie-runtime,
+            .movie-altersfreigabe {
                 text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
             }
 
@@ -1498,7 +1520,8 @@
                 font-size: 1.1rem;
             }
 
-            .movie-runtime {
+            .movie-runtime,
+            .movie-altersfreigabe {
                 font-size: 0.75rem;
             }
 
