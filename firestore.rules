@@ -237,11 +237,21 @@ service cloud.firestore {
         // 2. Wiedereinstieg mit gültigem Übergabe-Code - der funktioniert
         //    bewusst auch bei gesperrter Gruppe, denn genau dann braucht
         //    man ihn (Familie vollzählig, jemand wechselt das Handy).
+        // request.resource.data.get('ratings', {}) is map: grobe
+        // Typprüfung gegen Issue #54 - verhindert, dass das gesamte
+        // ratings-Feld z. B. auf einen String gesetzt wird. Security
+        // Rules können NICHT über die Einträge einer Map iterieren
+        // (kein Schleifenkonstrukt), einzelne Bewertungswerte lassen
+        // sich hier also nicht auf "Ganzzahl 0-5" prüfen - das passiert
+        // stattdessen beim Lesen in app.js (buildGroupInfo), wo jeder
+        // Wert vor der Anzeige validiert wird. Diese Regel ist also
+        // Ergänzung, nicht Ersatz für die Prüfung beim Rendern.
         allow create: if istAngemeldet()
                       && request.auth.uid == uid
                       && request.resource.data.name is string
                       && request.resource.data.name.size() > 0
                       && request.resource.data.name.size() <= 40
+                      && request.resource.data.get('ratings', {}) is map
                       && (
                            (
                              gruppe(gid).locked == false
@@ -258,6 +268,7 @@ service cloud.firestore {
                           istAngemeldet()
                           && request.auth.uid == uid
                           && request.resource.data.inviteCode == resource.data.inviteCode
+                          && request.resource.data.get('ratings', {}) is map
                         )
                         || ( istAdmin(gid) && nurFelderGeaendert(['name']) );
 

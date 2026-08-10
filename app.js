@@ -30,6 +30,21 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Wie escapeHtml(), aber zusätzlich für den Einsatz INNERHALB eines
+// HTML-Attributwerts (z. B. src="...", data-movie-id="...") geeignet:
+// escapeHtml() allein lässt " und ' unverändert durch (die Text-Node-
+// Serialisierung des Browsers escaped nur &, < und >), wodurch ein Wert
+// mit einem " weiterhin aus dem Attribut ausbrechen und z. B. ein
+// zusätzliches onerror="..." einschleusen könnte (Issue #55). Betrifft
+// vor allem Felder aus eigenen Listen (movie.id, movie.poster), die
+// über eine Gruppe geteilt und damit im Browser ANDERER Nutzer gerendert
+// werden - firestore.rules kann den Inhalt einzelner filme[]-Einträge
+// nicht prüfen (keine Element-Iteration in Security Rules möglich),
+// daher ist dieses Escaping beim Rendern die eigentliche Absicherung.
+function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // Beschriftung des Gruppen-Eintrags. Ist eine Gruppe aktiv, steht deren
 // Name darin, sonst schlicht "Gruppen". Lange Namen werden gekürzt,
 // damit die Desktop-Leiste nicht umbricht.
@@ -391,8 +406,22 @@ function buildGroupInfo(movieId) {
     const eigeneKennung = typeof window.getEigeneUid === 'function' ? window.getEigeneUid() : null;
     const andere = mitglieder.filter(m => m.uid !== eigeneKennung);
 
+    // roh kann aus einem direkten Firestore-Schreibzugriff (unter Umgehung
+    // der App) beliebigen Typ/Inhalt haben - firestore.rules prüft nur,
+    // dass ratings insgesamt eine Map ist, nicht den Inhalt einzelner
+    // Bewertungen (Issue #54). Deshalb hier hart auf eine ganze Zahl
+    // 0-5 validieren statt dem Wert per "|| 0" nur bei Falsy-Werten zu
+    // misstrauen - alles andere (Text, Objekte, Arrays, Zahlen außerhalb
+    // des gültigen Bereichs) wird zu 0. So bleibt b.wert beim späteren
+    // Rendern (Zeile mit <strong>${b.wert}</strong>) und in der
+    // Mittelwertbildung immer eine geprüfte kleine Ganzzahl - kein
+    // zusätzliches Escaping an der Ausgabe nötig.
     const fremdeBewertungen = andere
-        .map(m => ({ name: m.name, wert: (m.ratings && m.ratings[movieId] && m.ratings[movieId].value) || 0 }))
+        .map(m => {
+            const roh = m.ratings && m.ratings[movieId] && m.ratings[movieId].value;
+            const wert = (Number.isInteger(roh) && roh >= 0 && roh <= 5) ? roh : 0;
+            return { name: m.name, wert };
+        })
         .filter(b => b.wert > 0);
 
     if (fremdeBewertungen.length === 0) return '';   // niemand sonst hat bewertet
@@ -792,10 +821,10 @@ function renderMovieCard(movie, eigeneKarte) {
     const zusatzAttribute = eigeneKarte ? eigeneKarte.attribute : '';
     const werkzeugeHtml = eigeneKarte ? eigeneKarte.werkzeugeHtml : '';
     return `
-<div class="movie-card${watchedClass}" data-movie-id="${movie.id}"${zusatzAttribute}>
+<div class="movie-card${watchedClass}" data-movie-id="${escapeAttr(movie.id)}"${zusatzAttribute}>
     ${werkzeugeHtml}
     <div class="movie-poster" onclick="event.stopPropagation(); openOverlay(this.closest('.movie-card'))">
-        <img src="${movie.poster}" alt="Filmposter" loading="lazy" onerror="handlePosterError(this)">
+        <img src="${escapeAttr(movie.poster)}" alt="Filmposter" loading="lazy" onerror="handlePosterError(this)">
     </div>
     <div class="movie-content">
         <div class="movie-oben" onclick="obenBereichAngeklickt(event, this.closest('.movie-card'))">
@@ -1845,18 +1874,30 @@ function renderEigenerFilmCard(movie, listeId, index, gesamt, bearbeitbar) {
     const mobile = window.matchMedia('(max-width: 768px)').matches;
     const ziehbar = sortierModusAktiv && !mobile;
 
+    // escapeAttr() schützt hier nur den HTML-Attribut-Rand (z. B. ein "
+    // in movie.id), NICHT den eingebetteten JS-String innerhalb des
+    // onclick-Handlers selbst - ein ' in movie.id würde nach dem
+    // Entity-Decoding durch den Browser trotzdem als JS-String-Ende
+    // interpretiert. Das ist hier bewusst hingenommen: diese Karten
+    // gehören ausschließlich der eigenen, bearbeitbaren Liste (siehe
+    // renderEigenerFilmCard: bearbeitbar=false rendert ohne diese
+    // Werkzeuge), Angriffsfläche wäre also nur gegen den eigenen
+    // Account via direktem Firestore-Schreibzugriff unter Umgehung der
+    // App - kein Angriff auf andere Nutzer. Für einen vollständigen
+    // Schutz auch dieses Randfalls müssten die onclick-Attribute auf
+    // addEventListener + dataset umgestellt werden (siehe Issue #62).
     const attribute = ziehbar
-        ? ` draggable="true" ondragstart="eigeneKarteDragStart(event, '${movie.id}')" ondragover="eigeneKarteDragOver(event)" ondrop="eigeneKarteDrop(event, '${movie.id}', '${listeId}')"`
+        ? ` draggable="true" ondragstart="eigeneKarteDragStart(event, '${escapeAttr(movie.id)}')" ondragover="eigeneKarteDragOver(event)" ondrop="eigeneKarteDrop(event, '${escapeAttr(movie.id)}', '${escapeAttr(listeId)}')"`
         : '';
 
     const pfeile = (sortierModusAktiv && mobile) ? `
         <div class="eigene-pfeile" onclick="event.stopPropagation()">
-            <button ${index === 0 ? 'disabled' : ''} onclick="eigenerFilmHoch('${listeId}', '${movie.id}')" aria-label="Nach oben verschieben">▲</button>
-            <button ${index === gesamt - 1 ? 'disabled' : ''} onclick="eigenerFilmRunter('${listeId}', '${movie.id}')" aria-label="Nach unten verschieben">▼</button>
+            <button ${index === 0 ? 'disabled' : ''} onclick="eigenerFilmHoch('${escapeAttr(listeId)}', '${escapeAttr(movie.id)}')" aria-label="Nach oben verschieben">▲</button>
+            <button ${index === gesamt - 1 ? 'disabled' : ''} onclick="eigenerFilmRunter('${escapeAttr(listeId)}', '${escapeAttr(movie.id)}')" aria-label="Nach unten verschieben">▼</button>
         </div>` : '';
 
     const werkzeugeHtml = `
-        <button class="eigener-film-entfernen" onclick="event.stopPropagation(); eigenerFilmEntfernen('${listeId}', '${movie.id}')" aria-label="Film aus Liste entfernen">✕</button>
+        <button class="eigener-film-entfernen" onclick="event.stopPropagation(); eigenerFilmEntfernen('${escapeAttr(listeId)}', '${escapeAttr(movie.id)}')" aria-label="Film aus Liste entfernen">✕</button>
         ${pfeile}`;
 
     return renderMovieCard(movie, { attribute, werkzeugeHtml });
