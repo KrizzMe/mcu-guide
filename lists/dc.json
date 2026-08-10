@@ -1,0 +1,167 @@
+[
+    {
+        "id": "DC_Extended_Universe",
+        "title": "DC Extended Universe",
+        "navLabel": "DCEU",
+        "movies": [
+            {
+                "id": "man-of-steel-2013",
+                "poster": "posters/dc/man-of-steel-2013.jpg",
+                "desc": "Clark Kent entdeckt seine außerirdische Herkunft und muss als Superman die Erde vor der Vernichtung durch General Zod retten.",
+                "tmdb": "https://www.themoviedb.org/movie/49521-man-of-steel"
+            },
+            {
+                "id": "batman-v-superman-dawn-of-justice-2016",
+                "poster": "posters/dc/batman-v-superman-dawn-of-justice-2016.jpg",
+                "desc": "Aus Furcht vor unkontrollierter Macht fordert Gotham Citys Rächers Batman den Erdenretter Superman heraus, während eine neue Bedrohung heranwächst.",
+                "tmdb": "https://www.themoviedb.org/movie/209112-batman-v-superman-dawn-of-justice"
+            },
+            {
+                "id": "suicide-squad-2016",
+                "poster": "posters/dc/suicide-squad-2016.jpg",
+                "desc": "Eine Geheimagentin rekrutiert die gefährlichsten inhaftierten Superbösen für ein hochriskantes Himmelfahrtskommando zur Rettung der Welt.",
+                "tmdb": "https://www.themoviedb.org/movie/297761-suicide-squad"
+            },
+            {
+                "id": "wonder-woman-2017",
+                "poster": "posters/dc/wonder-woman-2017.jpg",
+                "desc": "Die Amazonenprinzessin Diana verlässt ihre geschützte Heimatinsel, um an der Seite der Menschen im Ersten Weltkrieg den Kriegsgott Ares zu stellen.",
+                "tmdb": "https://www.themoviedb.org/movie/297762-wonder-woman"
+            },
+            {
+                "id": "justice-league-2017",
+                "poster": "posters/dc/justice-league-2017.jpg",
+                "desc": "Angetrieben von neuem Glauben an die Menschheit rekrutieren Batman und Wonder Woman ein Team von Metawesen, um die Erde vor Steppenwolf zu schützen.",
+                "tmdb": "https://www.themoviedb.org/movie/141052-justice-league"
+            },
+            {
+                "id": "aquaman-2018",
+                "poster": "posters/dc/aquaman-2018.jpg",
+                "desc": "Arthur Curry, halb Mensch und halb Atlantier, muss sich seinem Erbe stellen und den Thron von Atlantis beanspruchen, um einen Oberflächenkrieg zu verhindern.",
+                "tmdb": "https://www.themoviedb.org/movie/297802-aquaman"
+            },
+            {
+                "id": "shazam-2019",
+                "poster": "posters/dc/shazam-2019.jpg",
+                "desc": "Der 14-jährige Waisenjunge Billy Batson verwandelt sich durch das Rufen eines Zauberworts in einen erwachsenen Superhelden mit magischen Kräften.",
+                "tmdb": "https://www.themoviedb.org/movie/287947-shazam"
+            },
+            {
+                "id": "birds-of-prey-the-emancipation-of-harley-quinn-2020",
+                "poster": "posters/dc/birds-of-prey-the-emancipation-of-harley-quinn-2020.jpg",
+                "desc": "Nach der Trennung vom Joker schließt sich Harley Quinn mit drei weiteren Heldinnen zusammen, um ein junges Mädchen vor dem Gangsterboss Black Mask zu beschützen.",
+                "tmdb": "https://www.themoviedb.org/movie/495764-birds-of-prey-and-the-fantabulous-emancipation-of-one-harley-quinn"
+            },
+            {
+                "id": "wonder-woman-1984-2020",
+                "poster": "posters/dc/wonder-woman-1984-2020.jpg",
+                "desc": "In den bunten 1980er-Jahren sieht sich Diana Prince mit einem Wunschstein konfrontiert, der Träume wahr macht, aber einen schrecklichen Preis fordert.",
+                "tmdb": "https://www.themoviedb.org/movie/464052-wonder-woman-1984"
+            },
+            {
+                "id": "zack-snyders-justice-league-2021",
+                "poster": "posters/dc/zack-snyders-justice-league-2021.jpg",
+                "desc": "Die epische, ursprüngliche Vision von Director Zack Snyder: Die Helden vereinen sich, um Darkseid und seine Armee am Untergang der Erde zu hindern.",
+                "tmdb": "https://www.themoviedb.org/movie/791373-zack-snyder-s-justice-league"
+            },
+            {
+                "id": "the-suicide-squad-2021",
+                "poster": "posters/dc/the-suicide-squad-2021.jpg",
+                "desc": "Eine bunt zusammengewürfelte Truppe verurteilter Krimineller wird auf die feindliche Insel Corto Maltese geschickt, um ein geheimes Nazi-Experiment zu zerstören.",
+                "tmdb": "https://www.themoviedb.org/movie/436969-the-suicide-squad"
+            },
+            {
+                "id": "black-adam-2022",
+                "poster": "posters/dc/black-adam-2022.jpg",
+                "desc": "Nach fast 5.000 Jahren aus seiner Gefangenschaft befreit, entfesselt der kompromisslose Antiheld Black Adam seine antike Rache in der modernen Welt.",
+                "tmdb": "https://www.themoviedb.org/movie/436270-black-adam"
+            },
+            {
+                "id": "shazam-fury-of-the-gods-2023",
+                "poster": "posters/dc/shazam-fury-of-the-gods-2023.jpg",
+                "desc": "Billy Batson und seine Pflegegeschwister müssen als Superhelden-Familie gegen die Rachegöttinnen antreten, die ihnen ihre Kräfte rauben wollen.",
+                "tmdb": "https://www.themoviedb.org/movie/594767-shazam-fury-of-the-gods"
+            },
+            {
+                "id": "the-flash-2023",
+                "poster": "posters/dc/the-flash-2023.jpg",
+                "desc": "Barry Allen nutzt seine Lichtgeschwindigkeit, um in der Zeit zurückzureisen – und verändert dabei versehentlich das Multiversum mit fatalen Folgen.",
+                "tmdb": "https://www.themoviedb.org/movie/298618-the-flash"
+            },
+            {
+                "id": "blue-beetle-2023",
+                "poster": "posters/dc/blue-beetle-2023.jpg",
+                "desc": "Der College-Absolvent Jaime Reyes gelangt in den Besitz einer außerirdischen Biotechnologie, die ihn mit einer mächtigen Rüstung ausstattet.",
+                "tmdb": "https://www.themoviedb.org/movie/565770-blue-beetle"
+            },
+            {
+                "id": "aquaman-lost-kingdom-2023",
+                "poster": "posters/dc/aquaman-lost-kingdom-2023.jpg",
+                "desc": "Um Atlantis und die Welt vor dem Rachefeldzug von Black Manta zu bewahren, muss Aquaman eine unerwartete Allianz mit seinem inhaftierten Bruder eingehen.",
+                "tmdb": "https://www.themoviedb.org/movie/572802-aquaman-and-the-lost-kingdom"
+            }
+        ]
+    },
+    {
+        "id": "Dark_Knight_Trilogie",
+        "title": "Dark Knight Trilogie",
+        "navLabel": "Dark Knight",
+        "movies": [
+            {
+                "id": "batman-begins-2005",
+                "poster": "posters/dc/batman-begins-2005.jpg",
+                "desc": "Nach dem Mord an seinen Eltern reist Bruce Wayne durch die Welt, erlernt den Kampf gegen das Unrecht und wird zur Legende von Gotham City.",
+                "tmdb": "https://www.themoviedb.org/movie/272-batman-begins"
+            },
+            {
+                "id": "the-dark-knight-2008",
+                "poster": "posters/dc/the-dark-knight-2008.jpg",
+                "desc": "Batman nimmt den Kampf gegen das organisierte Verbrechen auf, sieht sich jedoch bald dem chaotischen Genie des Jokers gegenübergestellt.",
+                "tmdb": "https://www.themoviedb.org/movie/155-the-dark-knight"
+            },
+            {
+                "id": "the-dark-knight-rises-2012",
+                "poster": "posters/dc/the-dark-knight-rises-2012.jpg",
+                "desc": "Acht Jahre nach den Ereignissen um den Joker zwingt der brutale Terrorist Bane den gealterten Bruce Wayne aus dem Ruhestand zurück ins Korsett des Fledermausmanns.",
+                "tmdb": "https://www.themoviedb.org/movie/49026-the-dark-knight-rises"
+            }
+        ]
+    },
+    {
+        "id": "Klassiker_Standalone",
+        "title": "Klassiker & Standalone",
+        "navLabel": "Klassiker",
+        "movies": [
+            {
+                "id": "superman-1978",
+                "poster": "posters/dc/superman-1978.jpg",
+                "desc": "Vom sterbenden Planeten Krypton auf die Erde geschickt, wächst Kal-El als Clark Kent auf und nutzt seine Kräfte als Beschützer der Menschheit.",
+                "tmdb": "https://www.themoviedb.org/movie/1924-superman"
+            },
+            {
+                "id": "batman-1989",
+                "poster": "posters/dc/batman-1989.jpg",
+                "desc": "Gotham City versinkt im Verbrechen, als der geheimnisvolle Batman vortritt, um den psychopathischen Joker in seine Schranken zu weisen.",
+                "tmdb": "https://www.themoviedb.org/movie/268-batman"
+            },
+            {
+                "id": "joker-2019",
+                "poster": "posters/dc/joker-2019.jpg",
+                "desc": "Die düstere Entstehungsgeschichte des gescheiterten Comedians Arthur Fleck, dessen Abstieg in den Wahnsinn eine Bewegung im verfallenden Gotham entfesselt.",
+                "tmdb": "https://www.themoviedb.org/movie/475557-joker"
+            },
+            {
+                "id": "the-batman-2022",
+                "poster": "posters/dc/the-batman-2022.jpg",
+                "desc": "In seinen ersten Jahren als Rächers ermittelt Batman in den korrupten Tiefen von Gotham City, um einen Rätsel hinterlassenden Serienkiller zu stoppen.",
+                "tmdb": "https://www.themoviedb.org/movie/414906-the-batman"
+            },
+            {
+                "id": "joker-folie-a-deux-2024",
+                "poster": "posters/dc/joker-folie-a-deux-2024.jpg",
+                "desc": "Im Arkham State Hospital wartet Arthur Fleck auf seinen Prozess und trifft dort auf die Liebe seines Lebens, mit der er eine musikalische Obsession teilt.",
+                "tmdb": "https://www.themoviedb.org/movie/889737-joker-folie-a-deux"
+            }
+        ]
+    }
+]
