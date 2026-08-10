@@ -87,6 +87,18 @@ function mitgliedschaftMerken(groupId, groupName, memberName) {
     aktiveGruppeSetzen(groupId);
 }
 
+// Hält den lokal gemerkten Gruppennamen (Grundlage für "Meine Gruppen"
+// und die Beschriftung in der Navigation) mit einer Umbenennung durch
+// den Admin synchron, ohne auf den nächsten Server-Abgleich zu warten.
+function mitgliedschaftGruppennameAktualisieren(groupId, neuerName) {
+    const liste = mitgliedschaftenLesen();
+    const eintrag = liste.find(g => g.groupId === groupId);
+    if (!eintrag) return;
+    eintrag.groupName = neuerName;
+    mitgliedschaftenSpeichern(liste);
+    navBeschriftungAktualisieren();
+}
+
 function aktiveGruppeId() {
     return localStorage.getItem(SPEICHER_AKTIV) || null;
 }
@@ -414,6 +426,28 @@ async function sperreUmschalten(groupId, gesperrt) {
         zeichneFenster();
     } catch (err) {
         meldung('Änderung fehlgeschlagen: ' + (err.code || err.message), true);
+    }
+}
+
+// Nur der Admin sieht die Schaltfläche dafür (Issue #43). Die Zugriffs-
+// regeln erlauben ausschließlich ihm das Ändern von groups/{groupId}.name.
+async function gruppeUmbenennen(groupId, alterName) {
+    const neu = window.prompt('Neuer Gruppenname:', alterName);
+    if (neu === null) return;
+    if (!neu.trim() || neu.trim().length > 60) {
+        meldung('Der Gruppenname muss zwischen 1 und 60 Zeichen lang sein.', true);
+        return;
+    }
+
+    const gruppenName = neu.trim();
+    try {
+        await updateDoc(doc(db, 'groups', groupId), { name: gruppenName });
+        mitgliedschaftGruppennameAktualisieren(groupId, gruppenName);
+        meldung('Gruppenname geändert.');
+        await eigeneGruppenLaden();
+        zeichneFenster();
+    } catch (err) {
+        meldung('Umbenennen fehlgeschlagen: ' + (err.code || err.message), true);
     }
 }
 
@@ -1268,6 +1302,7 @@ function abschnittAdmin() {
                     ${g.locked ? '<span class="gruppen-status">gesperrt</span>' : ''}
                 </div>
                 <div class="gruppen-aktionen">
+                    <button class="gruppen-btn schmal grau" data-aktion="gruppe-umbenennen" data-gid="${g.id}" data-name="${sicher(g.name)}">Umbenennen</button>
                     <button class="gruppen-btn schmal" data-aktion="kopieren" data-gid="${g.id}">Einladungslink kopieren</button>
                     <button class="gruppen-btn schmal grau" data-aktion="zeigen" data-gid="${g.id}">Link anzeigen</button>
                     <button class="gruppen-btn schmal grau" data-aktion="sperre" data-gid="${g.id}" data-wert="${g.locked ? 'auf' : 'zu'}">
@@ -2129,6 +2164,7 @@ function fensterKlicks(event) {
     if (aktion === 'kopieren')       linkKopieren(gid);
     if (aktion === 'zeigen')         linkAnzeigen(gid);
     if (aktion === 'sperre')         sperreUmschalten(gid, ziel.dataset.wert === 'zu');
+    if (aktion === 'gruppe-umbenennen') gruppeUmbenennen(gid, name);
     if (aktion === 'erneuern')       linkErneuern(gid);
     if (aktion === 'einladung-weg')  einladungVerwerfen();
     if (aktion === 'verlassen')      gruppeVerlassenLokal(gid);
