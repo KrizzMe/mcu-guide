@@ -1,13 +1,27 @@
-# Datenmodell der Gruppenfunktion
+# Datenmodell: Gruppen und eigene Listen
 
-Stand: Schritt 2 von Issue #16. Beschreibt, wie Gruppen, Mitglieder und geteilte
-Bewertungen in Firestore abgelegt sind und warum.
+Stand: Relaunch Stufe 4 (Issue #39). Beschreibt, wie Gruppen, Mitglieder,
+geteilte Bewertungen sowie eigene (kontogebundene) Listen und deren Teilen in
+Firestore abgelegt sind und warum.
+
+Die tatsächlich gültigen Zugriffsregeln liegen seit Issue #37 zusätzlich
+versioniert in [`firestore.rules`](firestore.rules) im Projektordner - vorher
+existierten sie ausschließlich in der Firebase Console. Änderungen an dieser
+Datei müssen weiterhin manuell in der Console übernommen werden (kein
+automatisches Deployment aus dem Repo).
 
 ## Übersicht
 
 ```
 users/{uid}
-    groupCount: number          Anzahl selbst angelegter Gruppen (Limit 20)
+    groupCount: number           Anzahl selbst angelegter Gruppen (Limit 20)
+    listenCount: number          Anzahl eigener Listen im Konto (Limit 10)
+
+users/{uid}/listen/{listeId}     Eigene, kontogebundene Liste (Relaunch Stufe 3)
+    kurzname: string             Für die Navigation, max. 15 Zeichen
+    name: string                 Für Überschriften, max. 40 Zeichen
+    filme: [ { id, tmdb, poster, desc }, ... ]     Max. 50 Einträge
+    geteiltInGruppen: [ groupId, ... ]             Max. 5 Gruppen (Stufe 4)
 
 groups/{groupId}                groupId = zufällig, dient als Teil des Einladungslinks
     name: string                Anzeigename der Gruppe
@@ -27,6 +41,10 @@ groups/{groupId}/members/{uid}      Ein Dokument pro Person
         "iron-man-2008": { value: 4, updatedAt: 1785661566168 },
         ...
     }
+
+groups/{groupId}/geteilteListen/{ownerUid}_{listeId}    Zeiger (Relaunch Stufe 4)
+    ownerUid: string             Wessen Liste
+    listeId: string              Welche Liste (siehe users/{uid}/listen/{listeId})
 ```
 
 ## Warum alle Bewertungen in einem Dokument?
@@ -55,6 +73,43 @@ derselben Gruppe sichtbar. Das ist bewusst in Kauf genommen: Wer bereits in der
 Gruppe ist, hat den Code ohnehin. Für Außenstehende bleibt er unsichtbar, da
 Mitglieds-Dokumente nur von Mitgliedern gelesen werden dürfen.
 
+## Warum ist bei eigenen Listen Firestore die führende Quelle?
+
+Bewusste Abweichung vom sonstigen Grundsatz "lokal ist führend" (siehe
+Bewertungen oben): Sobald eine Liste kontogebunden ist (Relaunch Stufe 3),
+gilt Firestore als Wahrheit, `localStorage` ist nur noch Anzeige-Cache. Grund:
+Eine kontogebundene Liste soll geräteübergreifend UND für Gruppenmitglieder
+sichtbar sein - das geht nur, wenn es eine einzige, serverseitige Quelle gibt.
+Bearbeiten setzt deshalb bewusst eine Internetverbindung voraus (keine
+Offline-Warteschlange wie bei Bewertungen); ohne Verbindung oder Anmeldung ist
+die Liste nur lesbar.
+
+## Warum ein Zeiger-Dokument statt direkter Suche nach geteilten Listen?
+
+Naheliegend wäre gewesen, geteilte Listen über eine Firestore-Collection-
+Group-Abfrage zu finden (alle `listen`-Unterkollektionen gleichzeitig
+durchsuchen, gefiltert nach `geteiltInGruppen array-contains meineGruppenId`).
+Das scheiterte im echten Test mit `permission-denied`, obwohl ein einzelner
+`getDoc()` auf genau dasselbe Dokument mit derselben Regel einwandfrei
+funktionierte - Firestore-Sicherheitsregeln unterstützen `exists()`-Prüfungen
+für Collection-Group-Abfragen über Sammlungsgrenzen hinweg offenbar nicht
+zuverlässig, auch wenn sie für ein einzelnes Dokument korrekt auswerten.
+
+Deshalb gibt es stattdessen `groups/{groupId}/geteilteListen` - ein reiner
+Zeiger (`ownerUid` + `listeId`), abgesichert über dasselbe, seit Jahren
+bewährte Muster wie die Mitgliederliste (`istMitglied` auf eine bekannte,
+einzelne Gruppe). Der eigentliche Lesezugriff auf den Listeninhalt läuft
+unabhängig davon weiterhin direkt über `users/{uid}/listen/{listeId}` mit
+`geteiltInGruppen` - das hat sich als korrekt erwiesen, nur das AUFFINDEN
+brauchte einen anderen Weg. Warum eine feste Obergrenze von 5 gleichzeitig
+geteilten Gruppen: Firestore-Regeln können nicht über ein Array laufen und
+dabei je Eintrag `exists()` aufrufen (harte Grenze der Regel-Sprache) - die
+Deckelung erlaubt stattdessen eine fest ausgerollte Prüfung
+(`istMitgliedEinerDieserGruppen` in `firestore.rules`), die bei jedem
+Lesezugriff live die echte Mitgliedschaft prüft. Rausschmiss aus einer Gruppe
+oder deren Auflösung wirkt dadurch sofort, ganz ohne die geteilte Liste selbst
+anzufassen.
+
 ## Wer darf was?
 
 | Aktion | Erlaubt für |
@@ -68,6 +123,11 @@ Mitglieds-Dokumente nur von Mitgliedern gelesen werden dürfen.
 | Mitglieder + Bewertungen lesen | Nur Mitglieder derselben Gruppe (und der Admin) |
 | Eigene Bewertungen schreiben | Nur man selbst |
 | Mitglied entfernen | Man selbst oder der Admin |
+| Eigene Liste anlegen/ändern/löschen | Nur der Besitzer, und nur echt angemeldet |
+| Eigene Liste lesen | Der Besitzer, oder Mitglied einer Gruppe, mit der sie geteilt ist |
+| Zeiger auf geteilte Liste lesen | Nur Mitglieder derselben Gruppe (und der Admin) |
+| Zeiger auf geteilte Liste anlegen | Nur der Besitzer der Liste, und nur als Mitglied der Zielgruppe |
+| Zeiger auf geteilte Liste löschen | Der Besitzer (Teilen beenden) oder der Gruppen-Admin |
 
 ## Bekannte Einschränkungen
 
@@ -83,3 +143,15 @@ Mitglieds-Dokumente nur von Mitgliedern gelesen werden dürfen.
 
 - **Beim Löschen einer Gruppe werden Unterdokumente nicht automatisch mit
   gelöscht.** Mitglieder und Einladungscode müssen einzeln entfernt werden.
+
+- **Das 10-Listen-Limit im Konto ist genauso wenig manipulationssicher wie das
+  Gruppen-Limit** (`listenCount` in `users/{uid}`, App-gepflegt) - dieselbe
+  akzeptierte Einschränkung, aus demselben Grund (echte Anmeldung nötig).
+
+- **Zeiger auf geteilte Listen (`groups/{gid}/geteilteListen`) werden beim
+  Löschen einer Gruppe oder eines Kontos nicht automatisch mit entfernt** -
+  dieselbe Einschränkung wie bei Gruppen-Unterdokumenten oben. Praktisch
+  unkritisch: Ein verwaister Zeiger zeigt auf eine dann nicht mehr existierende
+  Liste, `geteilteListenLaden()` in `groups.js` überspringt ihn beim nächsten
+  Laden einfach still (kein Fehler, keine Sicherheitslücke - nur ein
+  ungenutztes Dokument, das liegen bleibt).
