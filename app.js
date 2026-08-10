@@ -379,6 +379,13 @@ function renderMovieRuntime(movie) {
     return `<span class="movie-runtime" data-laufzeit-slot="${movie.id}"></span>`;
 }
 
+function renderMovieAltersfreigabe(movie) {
+    // Platzhalter - wird von titelUndLaufzeitAnzeigen() befüllt (Issue #67).
+    // Bleibt leer (und damit per CSS unsichtbar), wenn TMDB keine deutsche
+    // FSK-Freigabe kennt.
+    return `<span class="movie-altersfreigabe" data-altersfreigabe-slot="${movie.id}"></span>`;
+}
+
 function renderMovieMeta(movie) {
     const tmdbLink = movie.tmdb
         ? `<a href="${escapeHtml(movie.tmdb)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" data-tmdb-label-slot="${movie.id}" aria-label="Film auf TMDB ansehen"><img class="meta-icon tmdb-karten-icon" src="tmdb-logo.svg" alt="TMDB" loading="lazy"></a>`
@@ -486,12 +493,15 @@ function extractTmdbId(tmdbUrl) {
     return treffer ? treffer[1] : null;
 }
 
-// --- Titel und Laufzeit live über TMDB ---
-// moviedata.json enthält bewusst keinen Text mehr dafür - beides wird
+// --- Titel, Laufzeit und Altersfreigabe live über TMDB (Issue #67) ---
+// moviedata.json enthält bewusst keinen Text mehr dafür - alles wird
 // bei jedem Aufruf aktuell nachgeladen. Um die Seite trotzdem schnell
 // zu halten und nicht bei jedem Besuch 47 Anfragen an TMDB zu stellen:
 // 1. alle Filme WERDEN GLEICHZEITIG statt nacheinander abgefragt
 // 2. das Ergebnis wird 7 Tage lokal zwischengespeichert
+// Die Altersfreigabe (FSK) wird bewusst über append_to_response=release_dates
+// im selben Aufruf mitgeladen statt über eine eigene Anfrage pro Film -
+// verdoppelt sonst die Anzahl der TMDB-Anfragen ohne Nutzen.
 const TMDB_DETAILS_CACHE_KEY = 'mcu-tmdb-details-cache';
 const TMDB_DETAILS_GUELTIG_MS = 7 * 24 * 60 * 60 * 1000; // 7 Tage
 
@@ -527,11 +537,17 @@ function alleMovieTmdbIds() {
 // gebraucht werden (sichtbarer Titel, Laufzeit-Badge, TMDB-Icon-Label,
 // Poster-Alternativtext) - unabhängig davon, ob der Wert aus dem Cache
 // oder frisch von TMDB kommt.
-function titelUndLaufzeitAnzeigen(movieId, titel, laufzeit) {
+function titelUndLaufzeitAnzeigen(movieId, titel, laufzeit, altersfreigabe) {
     const titelEl = document.querySelector(`[data-titel-slot="${movieId}"]`);
     if (titelEl) {
         titelEl.textContent = titel;
         titelEl.classList.remove('laedt');
+    }
+
+    // Rechts neben dem Titel, links von der Laufzeit (Issue #67)
+    const altersfreigabeEl = document.querySelector(`[data-altersfreigabe-slot="${movieId}"]`);
+    if (altersfreigabeEl) {
+        altersfreigabeEl.textContent = altersfreigabe ? `FSK ${altersfreigabe}` : '';
     }
 
     const laufzeitEl = document.querySelector(`[data-laufzeit-slot="${movieId}"]`);
@@ -558,8 +574,13 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
 
     movieList.forEach(({ id, tmdbId }) => {
         const eintrag = cache[tmdbId];
-        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS) {
-            titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit);
+        // 'altersfreigabe' in eintrag statt eintrag.altersfreigabe: Alte
+        // Cache-Einträge von vor Issue #67 haben das Feld gar nicht (auch
+        // nicht als null) und würden sonst bis zu 7 Tage lang fälschlich
+        // als "gültig, aber ohne Freigabe" durchgehen statt neu geladen
+        // zu werden.
+        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS && 'altersfreigabe' in eintrag) {
+            titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit, eintrag.altersfreigabe);
         } else {
             zuLaden.push({ id, tmdbId });
         }
@@ -569,7 +590,7 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
 
     await Promise.all(zuLaden.map(async ({ id, tmdbId }) => {
         try {
-            const url = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=de-DE`;
+            const url = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=de-DE&append_to_response=release_dates`;
             const antwort = await fetch(url);
             if (!antwort.ok) throw new Error('HTTP ' + antwort.status);
             const daten = await antwort.json();
@@ -578,9 +599,10 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
             const rohtitel = daten.title || daten.original_title || 'Unbekannter Titel';
             const titel = `${rohtitel} (${jahr})`;
             const laufzeit = daten.runtime ? `${daten.runtime} Min.` : '---';
+            const altersfreigabe = ermittleAltersfreigabe(daten);
 
-            cache[tmdbId] = { title: titel, laufzeit, cachedAt: Date.now() };
-            titelUndLaufzeitAnzeigen(id, titel, laufzeit);
+            cache[tmdbId] = { title: titel, laufzeit, altersfreigabe, cachedAt: Date.now() };
+            titelUndLaufzeitAnzeigen(id, titel, laufzeit, altersfreigabe);
         } catch (err) {
             console.warn('Titel/Laufzeit konnten nicht geladen werden für', id, err);
             titelUndLaufzeitAnzeigen(id, 'Titel nicht verfügbar', '');
@@ -588,6 +610,19 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
     }));
 
     tmdbDetailsCacheSchreiben(cache);
+}
+
+// Liest die deutsche FSK-Freigabe aus release_dates (Issue #67). TMDB
+// liefert pro Land mehrere Einträge (Kino, Video, ...) mit teils leerer
+// certification - der erste nicht-leere Wert für DE wird verwendet.
+// "0" (freigegeben ohne Altersbeschränkung) ist ein gültiges Ergebnis und
+// wird bewusst NICHT wie ein fehlender Wert behandelt.
+function ermittleAltersfreigabe(daten) {
+    const laender = (daten.release_dates && daten.release_dates.results) || [];
+    const de = laender.find(land => land.iso_3166_1 === 'DE');
+    if (!de) return null;
+    const eintrag = (de.release_dates || []).find(r => r.certification);
+    return eintrag ? eintrag.certification : null;
 }
 
 // --- Streaming-Anbieter (Issue #33) ---
@@ -830,6 +865,7 @@ function renderMovieCard(movie, eigeneKarte) {
         <div class="movie-oben" onclick="obenBereichAngeklickt(event, this.closest('.movie-card'))">
             <div class="movie-title-row">
                 <div class="movie-title laedt" data-titel-slot="${movie.id}">Lädt…</div>
+                ${renderMovieAltersfreigabe(movie)}
                 ${renderMovieRuntime(movie)}
             </div>
             <div class="movie-desc">${escapeHtml(movie.desc)}</div>
