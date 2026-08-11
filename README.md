@@ -1,17 +1,20 @@
-# MCU Fan Guide
+# My Movie Guide
 
-Ein privater Fan-Guide für die Filme des Marvel Cinematic Universe (MCU) und
-wichtige Zusatzfilme – kuratiert in einer eigenen empfohlenen Reihenfolge für
-gemeinsame Familien-Filmabende.
+Ein privater Fan-Guide für mehrere kuratierte Filmreihen (aktuell Marvel
+Cinematic Universe, Star Wars und DC Universe, weitere folgen) – jeweils in
+einer eigenen empfohlenen Reihenfolge für gemeinsame Familien-Filmabende.
 
 **Live:** https://mymovieguide.de/
 
 ## Funktionen
 
-- Alle Filme mit Poster, Laufzeit, Kurzbeschreibung sowie Links zu IMDb und TMDb
+- Mehrere Filmlisten (MCU, Star Wars, DC, ...) mit Poster, Kurzbeschreibung
+  und Link zu TMDb; Titel und Laufzeit werden live von TMDb geladen
 - Bewertung pro Film über Popcorn-Tüten (0–5)
 - Fortschrittsanzeige direkt in der Navigation: jeder Menüpunkt füllt sich
   grün, je mehr Filme der jeweiligen Sektion bewertet ("gesehen") wurden
+- Auswahl bevorzugter Streaming-Anbieter mit Verfügbarkeitsanzeige je Film
+  (Daten von TMDb/JustWatch)
 - Responsive Gestaltung mit eigenem Poster-Layout für Desktop und Mobile
 - **Gruppen:** Bewertungen lassen sich mit der Familie teilen – ohne dass
   Mitglieder sich anmelden müssen (Details siehe [`DATENMODELL.md`](DATENMODELL.md))
@@ -20,51 +23,55 @@ gemeinsame Familien-Filmabende.
 
 | Datei / Ordner | Zweck |
 |---|---|
-| `index.html` | Seitenstruktur und komplettes CSS |
-| `app.js` | Lädt und validiert `moviedata.json`, baut Navigation und Filmkarten auf, Bewertungen, Fortschrittsanzeige |
+| `index.html` | Seitenstruktur (Markup) |
+| `styles.css` | Komplettes CSS |
+| `app.js` | Lädt `lists/manifest.json` und die aktive Listendatei, baut Navigation und Filmkarten auf, Bewertungen, Fortschrittsanzeige, Streaming-Anbieter |
 | `ui.js` | Poster-Großansicht, mobiles Menü, Wischgeste |
 | `groups.js` | Gruppenfunktion: Anmeldung, Beitritt, Abgleich, Verwaltung (Firebase) |
-| `moviedata.json` | Alle Filmdaten (Titel, Beschreibung, Laufzeit, Links, Poster-Pfad) |
-| `posters/` | Lokale Poster-Bilder, Dateiname = `id` aus `moviedata.json` |
-| `manifest.json` | App-Icon und Metadaten für "Zum Homescreen hinzufügen" |
+| `lists/manifest.json` | Katalog aller Filmreihen (id, Name, Kurzname, Pfad zur Listendatei, Hintergrundbild) |
+| `lists/mcu.json`, `lists/star-wars.json`, `lists/dc.json`, ... | Filmdaten je Filmreihe, aufgeteilt in Sektionen (siehe unten) |
+| `posters/<listen-id>/` | Lokale Poster-Bilder je Filmreihe, Dateiname = `id` aus der jeweiligen Listendatei |
+| `manifest.json` | PWA-Manifest (App-Icon, Metadaten für "Zum Homescreen hinzufügen") – nicht zu verwechseln mit `lists/manifest.json` |
 | `m.png`, `fav32.png` | App-Icon bzw. Favicon |
-| `imdb.png`, `tmdb.png` | Icons für die Verlinkung zu IMDb/TMDb |
+| `tmdb-logo.svg`, `justwatch-icon.svg` | Icons für die Verlinkung zu TMDb bzw. JustWatch |
+| `firestore.rules` | Versionierte Kopie der Firestore-Zugriffsregeln |
+| `tests/` | Sicherheitstests der Firestore-Regeln gegen den lokalen Emulator (siehe Kopfkommentar der jeweiligen Datei) |
 | `DATENMODELL.md` | Aufbau der Gruppenfunktion in Firestore, Zugriffsregeln |
 
 ## Einen Film hinzufügen
 
-1. `moviedata.json` öffnen und die passende Sektion suchen (z. B. `Erste_Helden`).
+1. Die passende Datei unter `lists/` öffnen (z. B. `lists/mcu.json`) und die
+   passende Sektion suchen (z. B. `Erste_Helden`).
 2. Im `movies`-Array der Sektion ein neues Objekt ergänzen:
 
    ```json
    {
        "id": "iron-man-2008",
-       "title": "Iron Man (2008)",
-       "poster": "posters/iron-man-2008.jpg",
+       "poster": "posters/mcu/iron-man-2008.jpg",
        "desc": "Kurze Beschreibung des Films.",
-       "runtime": "126 Min.",
-       "imdb": "https://www.imdb.com/title/...",
-       "tmdb": "https://www.themoviedb.org/movie/..."
+       "tmdb": "https://www.themoviedb.org/movie/1726-iron-man"
    }
    ```
 
    Die `id` muss innerhalb der Datei eindeutig sein (wird u. a. für
-   Bewertungen und den Poster-Dateinamen verwendet).
+   Bewertungen und den Poster-Dateinamen verwendet). Titel und Laufzeit
+   stehen bewusst **nicht** in der Datei – sie werden beim Anzeigen live
+   von TMDb geladen (7-Tage-Zwischenspeicherung im Browser) und dafür aus
+   der `tmdb`-URL abgeleitet.
 
-3. Das passende Poster-Bild unter `posters/<id>.jpg` ablegen – der
-   Dateiname muss exakt der `id` entsprechen.
-4. Änderungen lokal testen (siehe unten), dann `moviedata.json` und das
-   neue Poster ins Repository hochladen.
-
-Für die Laufzeit eines noch nicht veröffentlichten Films `"runtime": "---"`
-eintragen.
+3. Das passende Poster-Bild unter `posters/<listen-id>/<id>.jpg` ablegen –
+   der Dateiname muss exakt der `id` entsprechen. TMDb-Dateinamen weichen
+   davon oft ab, also nach dem Herunterladen den tatsächlichen Dateinamen
+   prüfen statt zu raten.
+4. Änderungen lokal testen (siehe unten), dann die geänderte Datei unter
+   `lists/` und das neue Poster ins Repository hochladen.
 
 ## Lokal testen
 
-`index.html` lädt `moviedata.json` per `fetch()` nach – das funktioniert aus
-Sicherheitsgründen der Browser **nicht**, wenn man die Datei einfach per
-Doppelklick öffnet (`file://`-Adresse). Stattdessen einen kleinen lokalen
-Webserver starten:
+`app.js` lädt `lists/manifest.json` und die Listendateien per `fetch()` nach –
+das funktioniert aus Sicherheitsgründen der Browser **nicht**, wenn man
+`index.html` einfach per Doppelklick öffnet (`file://`-Adresse). Stattdessen
+einen kleinen lokalen Webserver starten:
 
 ```bash
 python3 -m http.server
