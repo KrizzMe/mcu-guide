@@ -2,6 +2,44 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
+
+    <!-- Content-Security-Policy (Issue #62) - GitHub Pages erlaubt keine
+         eigenen HTTP-Header, deshalb hier per meta-Tag statt als
+         Response-Header. Muss so früh wie möglich im <head> stehen, da sie
+         nur Ressourcen betrifft, die NACH diesem Tag angefragt werden.
+         Enthält "unsafe-inline" für script-src/style-src, weil die App
+         durchgehend Inline-onclick-Attribute und einzelne Inline-style-
+         Attribute nutzt (siehe Issue #62, Migration auf addEventListener
+         als separates, größeres Folge-Issue). Trotzdem wirksam gegen
+         Fremd-Skripte/-Verbindungen von komplett anderen Domains.
+         Erlaubte Quellen, je nach tatsächlicher Nutzung im Code:
+         - www.gstatic.com: Firebase-SDK-Module (groups.js-Imports)
+         - apis.google.com: lädt Firebase intern für signInWithPopup nach
+           (gapi, für den Google-Anmelde-Popup) - beim lokalen Test ohne
+           dieses Fehlen wortwörtlich als CSP-Verstoß in der Konsole
+           aufgetaucht, deshalb hier bewusst mit aufgenommen
+         - mcuguide.firebaseapp.com: versteckter Auth-Hilfs-iframe von
+           Firebase (signInWithPopup)
+         - firestore.googleapis.com / identitytoolkit.googleapis.com /
+           securetoken.googleapis.com / www.googleapis.com: Firestore
+           bzw. Firebase Authentication
+         - api.themoviedb.org / image.tmdb.org: TMDB-Anfragen bzw. Poster
+         - www.youtube-nocookie.com: eingebetteter Trailer-Player
+         frame-ancestors/report-uri/sandbox fehlen bewusst - die
+         CSP-Spezifikation ignoriert diese Direktiven, wenn die Policy
+         (wie hier) per meta-Tag statt per HTTP-Header ausgeliefert wird. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com;
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' https://image.tmdb.org;
+        font-src 'self';
+        connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://api.themoviedb.org;
+        frame-src https://www.youtube-nocookie.com https://mcuguide.firebaseapp.com;
+        object-src 'none';
+        base-uri 'self';
+    ">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Movie Guide</title>
     <meta name="description" content="Private Übersicht deiner Lieblings-Filmreihen in empfohlener Reihenfolge für gemeinsame Familien-Filmabende - mit Bewertung und geteilten Gruppen-Bewertungen.">
