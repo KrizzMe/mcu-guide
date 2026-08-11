@@ -70,7 +70,10 @@
         </div>
     </div>
 
-    <!-- ui.js zuerst: app.js greift beim Aufbau der Navigation darauf zu -->
+    <!-- kernfunktionen.js zuerst: app.js nutzt dessen Funktionen/Konstanten
+         als normale Globals (Issue #61) -->
+    <script src="kernfunktionen.js"></script>
+    <!-- ui.js vor app.js: app.js greift beim Aufbau der Navigation darauf zu -->
     <script src="ui.js"></script>
     <script src="app.js"></script>
     <!-- groups.js als Modul, da das Firebase-SDK nur so verfügbar ist -->

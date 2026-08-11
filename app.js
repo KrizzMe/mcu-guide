@@ -10,6 +10,12 @@
    Funktionen global verfügbar bleiben - die generierten Karten nutzen
    onclick-Attribute, die auf globale Funktionen zugreifen.
    Wird nach ui.js geladen, da renderNav() dessen Funktionen benötigt.
+
+   Ein paar reine, DOM-/Netzwerk-unabhängige Funktionen (u. a.
+   extractTmdbId, eigeneFilmIdErzeugen, Cache-Gültigkeitsprüfung,
+   Listennamen-Prüfung) liegen NICHT hier, sondern in kernfunktionen.js
+   (vor dieser Datei geladen) - dorthin ausgelagert, damit sie isoliert
+   mit node --test geprüft werden können (Issue #61).
    ===================================================================== */
 
 // ================================================================
@@ -486,14 +492,9 @@ const TMDB_API_KEY = 'f95f3fc3a440179586a593719e24375c';
 // Vermeidet, denselben Film innerhalb einer Sitzung mehrfach abzufragen.
 const trailerCache = {};
 
-// Liest die TMDB-Film-Kennung aus dem bereits vorhandenen tmdb-Link
-// (z. B. aus .../movie/557-spider-man wird 557) - kein eigenes
-// Datenfeld nötig.
-function extractTmdbId(tmdbUrl) {
-    if (!tmdbUrl) return null;
-    const treffer = tmdbUrl.match(/themoviedb\.org\/movie\/(\d+)/);
-    return treffer ? treffer[1] : null;
-}
+// extractTmdbId() liegt in kernfunktionen.js (Issue #61) - liest die
+// TMDB-Film-Kennung aus dem bereits vorhandenen tmdb-Link (z. B. aus
+// .../movie/557-spider-man wird 557), kein eigenes Datenfeld nötig.
 
 // --- Titel, Laufzeit und Altersfreigabe live über TMDB (Issue #67) ---
 // moviedata.json enthält bewusst keinen Text mehr dafür - alles wird
@@ -581,8 +582,8 @@ async function tmdbDetailsFuerAlleLaden(movieList) {
         // nicht als null) und würden sonst bis zu 7 Tage lang fälschlich
         // als "gültig, aber ohne Freigabe" durchgehen statt neu geladen
         // zu werden. Dieselbe Falle gilt für 'backdropPath' seit Issue #69.
-        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_DETAILS_GUELTIG_MS
-            && 'altersfreigabe' in eintrag && 'backdropPath' in eintrag) {
+        // Prüfung selbst in cacheEintragGueltig() (kernfunktionen.js).
+        if (cacheEintragGueltig(eintrag, jetzt, TMDB_DETAILS_GUELTIG_MS, ['altersfreigabe', 'backdropPath'])) {
             titelUndLaufzeitAnzeigen(id, eintrag.title, eintrag.laufzeit, eintrag.altersfreigabe);
         } else {
             zuLaden.push({ id, tmdbId });
@@ -816,7 +817,7 @@ async function tmdbProvidersFuerAlleLaden(movieList) {
 
     movieList.forEach(({ id, tmdbId, tmdbUrl }) => {
         const eintrag = cache[tmdbId];
-        if (eintrag && (jetzt - eintrag.cachedAt) < TMDB_PROVIDERS_GUELTIG_MS) {
+        if (cacheEintragGueltig(eintrag, jetzt, TMDB_PROVIDERS_GUELTIG_MS)) {
             zeigeAnbieterAufKarte(id, eintrag.anbieter, tmdbUrl);
         } else {
             zuLaden.push({ id, tmdbId, tmdbUrl });
@@ -1127,8 +1128,8 @@ const EIGENE_LISTEN_MAX = 3;
 const KONTO_LISTEN_CACHE_KEY = 'mcu-konto-listen-cache';
 const KONTO_LISTEN_MAX = 10;
 const EIGENE_LISTE_FILME_MAX = 50;
-const EIGENER_KURZNAME_MAX = 15;
-const EIGENER_NAME_MAX = 40;
+// EIGENER_KURZNAME_MAX/EIGENER_NAME_MAX liegen in kernfunktionen.js
+// (Issue #61), zusammen mit der Prüfung, die sie verwendet.
 // Feste Obergrenze, mit wie vielen Gruppen GLEICHZEITIG geteilt werden
 // darf (Relaunch Stufe 4, Issue #39) - muss zur fest ausgerollten Prüfung
 // istMitgliedEinerDieserGruppen() in firestore.rules passen, da Firstore-
@@ -1470,20 +1471,11 @@ function listenKatalogNeuAufbauen() {
     VERFUEGBARE_LISTEN = KATALOG_LISTEN.concat(lokaleEintraege, kontoEintraege, geteilteEintraege);
 }
 
-// Erzeugt aus Titel + Jahr dieselbe Art von ID wie posters/neuer-film.py
-// (id_slug_erzeugen) - bewusst identischer Algorithmus, damit ein Film,
-// der bereits in einer kuratierten Liste existiert, beim Hinzufügen zu
-// einer eigenen Liste dieselbe ID bekommt und seine Bewertung dadurch
-// automatisch übernommen wird (Bewertungen sind rein über die Film-ID
-// verknüpft, siehe getRating/setRating).
-function eigeneFilmIdErzeugen(titel, jahr) {
-    // \p{Diacritic}: Unicode-Eigenschaft für Akzentzeichen - fasst nach
-    // NFKD-Zerlegung (z. B. "é" -> "e" + Akzent) alle Akzente, nicht nur
-    // die im lateinischen Bereich üblichen.
-    const ohneAkzente = titel.normalize('NFKD').replace(/\p{Diacritic}/gu, '');
-    const slug = ohneAkzente.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    return `${slug}-${jahr}`;
-}
+// eigeneFilmIdErzeugen() liegt in kernfunktionen.js (Issue #61) - erzeugt
+// aus Titel + Jahr dieselbe Art von ID wie posters/neuer-film.py
+// (id_slug_erzeugen), damit ein Film, der bereits in einer kuratierten
+// Liste existiert, beim Hinzufügen zu einer eigenen Liste dieselbe ID
+// bekommt und seine Bewertung automatisch übernommen wird.
 
 async function eigeneListeTmdbAbfragen(tmdbId, sprache) {
     const url = sprache
@@ -1541,21 +1533,12 @@ function alleListenNamenGenutzt(ausgenommenId) {
     return { kurznamen, namen };
 }
 
+// Reine Prüflogik in pruefeListenNamen() (kernfunktionen.js, Issue #61) -
+// hier nur die Beschaffung der bereits genutzten Namen aus dem globalen
+// Listen-Katalog.
 function eigeneListeNamenPruefen(kurzname, name, ausgenommenId) {
-    if (!kurzname || !name) {
-        return 'Bitte Kurz- und Langname angeben.';
-    }
-    if (kurzname.length > EIGENER_KURZNAME_MAX) {
-        return `Kurzname darf höchstens ${EIGENER_KURZNAME_MAX} Zeichen lang sein.`;
-    }
-    if (name.length > EIGENER_NAME_MAX) {
-        return `Langname darf höchstens ${EIGENER_NAME_MAX} Zeichen lang sein.`;
-    }
     const { kurznamen, namen } = alleListenNamenGenutzt(ausgenommenId);
-    if (kurznamen.has(kurzname.toLowerCase()) || namen.has(name.toLowerCase())) {
-        return 'Diesen Namen gibt es schon - bitte einen anderen wählen.';
-    }
-    return null;
+    return pruefeListenNamen(kurzname, name, kurznamen, namen);
 }
 
 function eigeneListeZufallsId() {
