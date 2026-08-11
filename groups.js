@@ -2046,6 +2046,11 @@ function abschnittDatenschutz() {
                     und deine ausgewählten Streaming-Anbieter im lokalen Speicher
                     deines Geräts</li>
                 <li>Technische Angaben zum Angemeldet-Bleiben (durch Firebase)</li>
+                <li>Beim Anmelden per E-Mail-Link: deine eingegebene E-Mail-Adresse,
+                    damit sie nach dem Öffnen des Links auf diesem Gerät wieder
+                    vorliegt. Sie wird gelöscht, sobald die Anmeldung abgeschlossen
+                    ist; wird der Link nie geöffnet, bleibt sie bis zu einer manuellen
+                    Löschung der Browser-Daten liegen</li>
             </ul>
             <p>Das gilt gleichermaßen, ob du die Seite im Browser öffnest oder über
                das Symbol auf dem Startbildschirm - technisch ist es derselbe
@@ -2058,6 +2063,25 @@ function abschnittDatenschutz() {
         </div>
 
         <div class="ds-block">
+            <div class="ds-titel">Wie lange werden Daten gespeichert und auf welcher Grundlage?</div>
+            <ul>
+                <li>Konto, Gruppenmitgliedschaften und geteilte Bewertungen in Firebase:
+                    unbegrenzt, bis du sie selbst über <strong>Mein Profil → Account
+                    löschen</strong> entfernst</li>
+                <li>Titel, Laufzeit, Streaming-Anbieter und Trailer-Daten von TMDB:
+                    7 Tage lokaler Zwischenspeicher, danach automatische Neuabfrage</li>
+                <li>Lokale Bewertungen, Gruppenmitgliedschaften und Einstellungen:
+                    bleiben auf dem Gerät, bis du sie selbst löschst (siehe oben)</li>
+            </ul>
+            <p>Rechtsgrundlage ist bei Nutzung ohne Anmeldung dein berechtigtes
+               Interesse an der Funktion der App (Art. 6 Abs. 1 lit. f DSGVO), da
+               nichts das Gerät verlässt. Bei der Anmeldung und beim Teilen in
+               Gruppen ist es deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die
+               du durch die aktive Nutzung dieser Funktionen erteilst und jederzeit
+               durch Löschung deines Kontos widerrufen kannst.</p>
+        </div>
+
+        <div class="ds-block">
             <div class="ds-titel">Wo liegen die Daten?</div>
             <ul>
                 <li>Firebase (Google), Datenbankstandort Frankfurt am Main</li>
@@ -2065,14 +2089,24 @@ function abschnittDatenschutz() {
                 <li>Die technischen Bausteine der Anmeldung werden bei jedem
                     Seitenaufruf von einem Google-Server geladen; dabei wird deine
                     IP-Adresse an Google übertragen</li>
-                <li>Beim Antippen von "Trailer ansehen" fragt dein Browser direkt bei
-                    TMDB die aktuellen Trailer-Daten ab und bindet anschließend den
-                    YouTube-Player ein (datenschutzfreundliche Adresse
-                    youtube-nocookie.com). Beides passiert erst nach deinem Klick,
-                    nicht beim bloßen Betrachten der Filmliste</li>
+                <li>Sobald du eine Filmliste öffnest, fragt dein Browser automatisch bei
+                    TMDB Titel, Laufzeit und verfügbare Streaming-Anbieter zu den
+                    angezeigten Filmen ab und lädt die Poster direkt von TMDB-Servern
+                    (image.tmdb.org). Das passiert bereits beim bloßen Betrachten der
+                    Liste, nicht erst nach einem Klick - die Ergebnisse werden
+                    anschließend 7 Tage lokal zwischengespeichert (siehe unten unter
+                    „Wie lange werden Daten gespeichert und auf welcher
+                    Grundlage?")</li>
+                <li>Beim Antippen von "Trailer ansehen" fragt dein Browser zusätzlich
+                    direkt bei TMDB die aktuellen Trailer-Daten ab und bindet
+                    anschließend den YouTube-Player ein (datenschutzfreundliche Adresse
+                    youtube-nocookie.com). Das passiert - anders als bei Titel, Laufzeit,
+                    Streaming-Anbietern und Postern - tatsächlich erst nach deinem Klick</li>
             </ul>
             <p>Alle genannten Anbieter verarbeiten die Daten ausschließlich als
-               technische Dienstleister im Auftrag.</p>
+               technische Dienstleister im Auftrag. TMDB (The Movie Database) hat
+               seinen Sitz in den USA; beim Abruf wird deine IP-Adresse an TMDB
+               übertragen.</p>
         </div>
 
         <div class="ds-block">
