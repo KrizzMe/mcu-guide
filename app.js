@@ -934,7 +934,11 @@ function renderContent() {
     let inhaltHtml;
     if (eigeneListeAktiv) {
         const filme = MOVIE_DATA[0].movies;
-        inhaltHtml = renderEigeneListeWerkzeuge(aktiveListe)
+        // Eigene id auf dem Werkzeugleisten-Div, damit reine Panel-Toggles
+        // (Teilen, Hintergrund, Film hinzufügen, ...) darüber gezielt neu
+        // gerendert werden können, siehe eigeneWerkzeugeNeuRendern() -
+        // ohne dabei auch alle Filmkarten neu aufzubauen (Issue #60).
+        inhaltHtml = `<div id="eigene-werkzeuge-container">${renderEigeneListeWerkzeuge(aktiveListe)}</div>`
             + filme.map((m, i) => renderEigenerFilmCard(m, aktiveListeId, i, filme.length, aktiveListe.bearbeitbar)).join('');
     } else {
         inhaltHtml = MOVIE_DATA.map(section => `
@@ -1332,7 +1336,7 @@ async function listeVonGruppeEntfernen(listeId, gid) {
 
 function teilenPanelUmschalten(listeId) {
     teilenPanelOffenFuer = teilenPanelOffenFuer === listeId ? null : listeId;
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 // Hintergrundbild-Panel auf der Inhaltsseite einer eigenen Liste (Issue
@@ -1340,7 +1344,7 @@ function teilenPanelUmschalten(listeId) {
 // Aufbau her bewusst analog zu teilenPanelUmschalten/renderTeilenPanel.
 function hintergrundPanelUmschalten(listeId) {
     hintergrundPanelOffenFuer = hintergrundPanelOffenFuer === listeId ? null : listeId;
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 function hintergrundFehlerAnzeigen(text) {
@@ -1865,6 +1869,11 @@ async function eigeneKarteDrop(event, zielFilmId, listeId) {
     ladeUndRendereAktiveListe();
 }
 
+// Bewusst weiterhin voller renderContent()-Aufruf (Issue #60 geprüft, aber
+// hier nicht auf eigeneWerkzeugeNeuRendern() umgestellt): der Sortier-Modus
+// wirkt nicht nur auf die Werkzeugleiste, sondern auf JEDE Filmkarte
+// (Drag-Attribute/Pfeile, siehe renderEigenerFilmCard) - ein gezieltes
+// Update müsste also ohnehin alle Karten neu aufbauen.
 function sortierModusUmschalten() {
     sortierModusAktiv = !sortierModusAktiv;
     renderContent();
@@ -1875,19 +1884,19 @@ function eigenerFormularOeffnen() {
     eigenerBeschreibungModus = 'tmdb';
     eigenerAusgewaehlterFilm = null;
     eigenerSucheErgebnisse = [];
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 function eigenerFormularSchliessen() {
     eigenerFormularOffen = false;
     eigenerAusgewaehlterFilm = null;
     eigenerSucheErgebnisse = [];
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 function eigeneBeschreibungModusSetzen(modus) {
     eigenerBeschreibungModus = modus;
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 function eigenerFilmFehlerAnzeigen(text) {
@@ -1943,13 +1952,13 @@ function eigenerFilmAuswaehlen(index) {
     if (!treffer) return;
     eigenerAusgewaehlterFilm = treffer;
     eigenerSucheErgebnisse = [];
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 function eigenerFilmAuswahlZuruecksetzen() {
     eigenerAusgewaehlterFilm = null;
     eigenerSucheErgebnisse = [];
-    renderContent();
+    eigeneWerkzeugeNeuRendern();
 }
 
 async function eigenerFilmAbsenden(listeId) {
@@ -2041,6 +2050,24 @@ function renderEigeneListeWerkzeuge(eigeneListe) {
     const teilenPanel = teilenPanelOffenFuer === eigeneListe.id ? renderTeilenPanel(eigeneListe) : '';
 
     return `<div class="eigene-werkzeuge">${hinzufuegenButton}${sortierButton}${hintergrundButton}${teilenButton}${formular}${hintergrundPanel}${teilenPanel}</div>`;
+}
+
+// Aktualisiert gezielt nur die Werkzeugleiste einer eigenen Liste (Panels,
+// Formular, Buttons) statt renderContent() aufzurufen - vermeidet, dass
+// reine Panel-Toggles (Teilen, Hintergrund, Film hinzufügen, Beschreibungs-
+// Modus, Treffer-Auswahl) auch sämtliche Filmkarten neu aufbauen und deren
+// TMDB-Titel/Laufzeit kurz wieder "Lädt…" zeigen (Issue #60). NICHT für
+// sortierModusUmschalten geeignet - der Sortier-Modus wirkt zusätzlich auf
+// jede einzelne Filmkarte (Drag-Attribute/Pfeile in renderEigenerFilmCard),
+// die bleibt deshalb bei einem vollen renderContent().
+function eigeneWerkzeugeNeuRendern() {
+    const container = document.getElementById('eigene-werkzeuge-container');
+    const aktiveListe = findeListeNachId(aktiveListeId);
+    if (!container || !aktiveListe) {
+        renderContent();
+        return;
+    }
+    container.innerHTML = renderEigeneListeWerkzeuge(aktiveListe);
 }
 
 // Baut eine Filmkarte für eine eigene Liste: dieselbe Karte wie bei
